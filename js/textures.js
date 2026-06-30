@@ -153,16 +153,90 @@ const builders = {
     speckle(ctx, w, h, 200, [shade(color, 18)], 10, 40, 0.18);
   },
 
-  // Серая Луна.
+  // Подробная Луна: тёмные «моря», множество кратеров с подсвеченными
+  // краями и тенью на дне, плюс яркие кратеры с «лучами» (как настоящий
+  // кратер Тихо). Эта же текстура используется как карта рельефа (bumpMap).
   moon(ctx, w, h) {
-    fillBase(ctx, w, h, '#b8b8b8');
-    speckle(ctx, w, h, 600, ['#d0d0d0', '#9a9a9a', '#c4c4c4'], 2, 8, 0.5);
-    for (let i = 0; i < 40; i++) {
-      const x = Math.random() * w, y = Math.random() * h, r = 3 + Math.random() * 12;
-      ctx.beginPath(); ctx.fillStyle = '#888'; ctx.globalAlpha = 0.5;
+    fillBase(ctx, w, h, '#9c9a96');
+    // мелкая зернистость поверхности
+    speckle(ctx, w, h, 4000, ['#b4b2ad', '#86847f', '#a8a6a1', '#76746f'], 1, 4, 0.35);
+
+    // Тёмные «моря» (mare) — крупные неровные пятна.
+    const maria = [
+      [0.30, 0.34, 0.16, 0.11], [0.44, 0.30, 0.10, 0.08],
+      [0.36, 0.50, 0.13, 0.10], [0.55, 0.46, 0.09, 0.07],
+      [0.24, 0.46, 0.07, 0.06], [0.62, 0.32, 0.06, 0.05],
+    ];
+    for (const [mx, my, rw, rh] of maria) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#6f6d69';
+      ctx.beginPath();
+      const cx = mx * w, cy = my * h, ax = rw * w, ay = rh * h;
+      const lobes = 12;
+      for (let i = 0; i <= lobes; i++) {
+        const a = (i / lobes) * Math.PI * 2;
+        const wob = 0.78 + Math.random() * 0.4;
+        const px = cx + Math.cos(a) * ax * wob;
+        const py = cy + Math.sin(a) * ay * wob;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    const crater = (x, y, r) => {
+      // тень на дальнем крае (свет условно слева-сверху)
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(60,58,55,0.55)';
       ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      // дно
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(120,118,113,0.5)';
+      ctx.arc(x - r * 0.12, y - r * 0.12, r * 0.78, 0, Math.PI * 2); ctx.fill();
+      // подсвеченный ближний край
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(225,223,216,0.55)';
+      ctx.lineWidth = Math.max(1, r * 0.12);
+      ctx.arc(x - r * 0.18, y - r * 0.18, r * 0.92, Math.PI * 0.7, Math.PI * 1.9);
+      ctx.stroke();
+    };
+
+    // много кратеров разного размера
+    for (let i = 0; i < 320; i++) {
+      crater(Math.random() * w, Math.random() * h, 3 + Math.random() * Math.random() * 26);
+    }
+
+    // несколько ярких кратеров с лучами
+    for (let k = 0; k < 4; k++) {
+      const x = Math.random() * w, y = h * (0.15 + Math.random() * 0.7), r = 10 + Math.random() * 10;
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.strokeStyle = '#eceae3';
+      ctx.lineWidth = 2;
+      for (let j = 0; j < 14; j++) {
+        const a = Math.random() * Math.PI * 2, len = r * (3 + Math.random() * 6);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.beginPath();
+      ctx.fillStyle = '#e6e4dd'; ctx.globalAlpha = 0.8;
+      ctx.arc(x, y, r * 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      crater(x, y, r);
     }
     ctx.globalAlpha = 1;
+  },
+
+  // Ядро кометы — тёмный грязный лёд с ледяными пятнами.
+  comet(ctx, w, h) {
+    fillBase(ctx, w, h, '#5a5560');
+    speckle(ctx, w, h, 1800, ['#7a7585', '#3f3b46', '#9aa6c0', '#6b6675'], 2, 9, 0.5);
+    // ледяные «свежие» пятна
+    speckle(ctx, w, h, 120, ['#cfe0ff', '#aebfe0'], 4, 14, 0.4);
   },
 
   // Бурлящая поверхность Солнца.
@@ -184,17 +258,62 @@ function shade(hex, amt) {
 
 const cache = new Map();
 
+// Для самых заметных тел рисуем текстуру крупнее — больше мелких деталей.
+const HIRES = new Set(['moon', 'earth', 'jupiter']);
+
 export function makeTexture(type, color) {
   const key = type + (color || '');
   if (cache.has(key)) return cache.get(key);
-  const w = 1024, h = 512;
+  const w = HIRES.has(type) ? 2048 : 1024;
+  const h = w / 2;
   const canvas = makeCanvas(w, h);
   const ctx = canvas.getContext('2d');
   (builders[type] || builders.rocky)(ctx, w, h, color);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   cache.set(key, tex);
+  return tex;
+}
+
+// Мягкая радиальная «капля» света — для свечения комы кометы и Солнца.
+export function makeGlowTexture(color = '#bfe3ff') {
+  const s = 256;
+  const canvas = makeCanvas(s, s);
+  const g = canvas.getContext('2d');
+  const grad = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  grad.addColorStop(0, color + 'ff');
+  grad.addColorStop(0.3, color + 'aa');
+  grad.addColorStop(1, color + '00');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, s, s);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Градиент для хвоста кометы: ярко у ядра, плавно тает к концу.
+export function makeTailTexture(color = '#aee0ff') {
+  const w = 256, h = 64;
+  const canvas = makeCanvas(w, h);
+  const g = canvas.getContext('2d');
+  // вдоль X — затухание; по Y — мягкие края
+  const lin = g.createLinearGradient(0, 0, w, 0);
+  lin.addColorStop(0, color + 'ee');
+  lin.addColorStop(0.5, color + '66');
+  lin.addColorStop(1, color + '00');
+  g.fillStyle = lin;
+  g.fillRect(0, 0, w, h);
+  // мягкие верх/низ
+  const rad = g.createLinearGradient(0, 0, 0, h);
+  rad.addColorStop(0, '#00000000');
+  rad.addColorStop(0.5, '#ffffff22');
+  rad.addColorStop(1, '#00000000');
+  g.globalCompositeOperation = 'destination-in';
+  g.fillStyle = rad;
+  g.fillRect(0, 0, w, h);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 

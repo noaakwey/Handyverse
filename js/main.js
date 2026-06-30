@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SUN, PLANETS, WELCOME } from './data.js';
-import { makeTexture, makeRingTexture } from './textures.js';
+import { SUN, PLANETS, ASTEROIDS, COMET, PHENOMENA, WELCOME } from './data.js';
+import { makeTexture, makeRingTexture, makeGlowTexture, makeTailTexture } from './textures.js';
+import { createDemos } from './demos.js';
 
 // ============================================================
 //  Базовая сцена
@@ -14,9 +15,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(
-  55, window.innerWidth / window.innerHeight, 0.1, 4000
+  55, window.innerWidth / window.innerHeight, 0.1, 6000
 );
-const HOME_VIEW = new THREE.Vector3(0, 60, 120);
+const HOME_VIEW = new THREE.Vector3(0, 64, 130);
 camera.position.copy(HOME_VIEW);
 
 const controls = new OrbitControls(camera, canvas);
@@ -30,10 +31,16 @@ controls.target.set(0, 0, 0);
 // не были полностью чёрными с теневой стороны.
 const sunLight = new THREE.PointLight(0xffffff, 3.2, 0, 0.6);
 scene.add(sunLight);
-scene.add(new THREE.AmbientLight(0x6677aa, 0.72));
+const ambient = new THREE.AmbientLight(0x6677aa, 0.72);
+scene.add(ambient);
+
+// Всё «солнечное» складываем в одну группу — её удобно прятать на время
+// показа космических явлений (затмений и т.п.).
+const systemGroup = new THREE.Group();
+scene.add(systemGroup);
 
 // ============================================================
-//  Звёздное небо
+//  Звёздное небо (остаётся всегда)
 // ============================================================
 function makeStars() {
   const count = 2600;
@@ -44,7 +51,7 @@ function makeStars() {
     [1, 1, 1], [0.8, 0.85, 1], [1, 0.92, 0.78], [0.85, 0.95, 1],
   ];
   for (let i = 0; i < count; i++) {
-    const r = 600 + Math.random() * 1400;
+    const r = 900 + Math.random() * 2200;
     const th = Math.random() * Math.PI * 2;
     const ph = Math.acos(2 * Math.random() - 1);
     pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
@@ -57,7 +64,7 @@ function makeStars() {
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   const mat = new THREE.PointsMaterial({
-    size: 2.4, sizeAttenuation: true, vertexColors: true,
+    size: 2.6, sizeAttenuation: true, vertexColors: true,
     transparent: true, depthWrite: false,
   });
   return new THREE.Points(geo, mat);
@@ -74,72 +81,54 @@ const sunMesh = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ map: makeTexture('sun') })
 );
 sunMesh.userData = { body: SUN };
-scene.add(sunMesh);
+systemGroup.add(sunMesh);
 clickable.push(sunMesh);
 
-// Свечение Солнца (полупрозрачный спрайт-ореол).
-function makeGlow(color, size) {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const g = c.getContext('2d');
-  const grad = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  grad.addColorStop(0, color + 'ff');
-  grad.addColorStop(0.25, color + 'aa');
-  grad.addColorStop(1, color + '00');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 256, 256);
-  const tex = new THREE.CanvasTexture(c);
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex, transparent: true, depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  }));
-  spr.scale.set(size, size, 1);
-  return spr;
-}
-sunMesh.add(makeGlow('#ffd24d', SUN.radius * 5.2));
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: makeGlowTexture('#ffd24d'), transparent: true,
+  depthWrite: false, blending: THREE.AdditiveBlending,
+}));
+sunGlow.scale.set(SUN.radius * 5.2, SUN.radius * 5.2, 1);
+sunMesh.add(sunGlow);
 
 // ============================================================
 //  Планеты
 // ============================================================
 const bodies = []; // данные для анимации
 
-function makeOrbitLine(distance) {
-  const seg = 160;
+function makeOrbitLine(distance, color = 0x6f7bbf, opacity = 0.28) {
+  const seg = 180;
   const pts = [];
   for (let i = 0; i <= seg; i++) {
     const a = (i / seg) * Math.PI * 2;
     pts.push(new THREE.Vector3(Math.cos(a) * distance, 0, Math.sin(a) * distance));
   }
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
-  const mat = new THREE.LineBasicMaterial({
-    color: 0x6f7bbf, transparent: true, opacity: 0.28,
-  });
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
   return new THREE.LineLoop(geo, mat);
 }
 
 for (const p of PLANETS) {
-  scene.add(makeOrbitLine(p.distance));
+  systemGroup.add(makeOrbitLine(p.distance));
 
-  // Группа-«орбита» вращается вокруг Солнца; внутри неё планета.
   const orbit = new THREE.Group();
-  scene.add(orbit);
+  systemGroup.add(orbit);
 
   const texType = p.texture === 'ice' ? 'ice' : p.texture;
+  const tex = makeTexture(texType, p.color);
   const mat = new THREE.MeshStandardMaterial({
-    map: makeTexture(texType, p.color),
-    roughness: 1, metalness: 0,
+    map: tex, bumpMap: tex, bumpScale: 0.015, roughness: 1, metalness: 0,
   });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius, 40, 40), mat);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius, 48, 48), mat);
   mesh.position.x = p.distance;
   mesh.userData = { body: p };
-  if (p.tilt) mesh.rotation.z = p.tilt; // Уран «лежит на боку»
+  if (p.tilt) mesh.rotation.z = p.tilt;
   orbit.add(mesh);
   clickable.push(mesh);
 
   // Кольца (Сатурн)
   if (p.rings) {
-    const ringGeo = new THREE.RingGeometry(p.rings.inner, p.rings.outer, 80);
-    // развернуть UV, чтобы текстура шла по радиусу
+    const ringGeo = new THREE.RingGeometry(p.rings.inner, p.rings.outer, 96);
     const pos = ringGeo.attributes.position;
     const uv = ringGeo.attributes.uv;
     const v = new THREE.Vector3();
@@ -157,14 +146,17 @@ for (const p of PLANETS) {
     mesh.add(ring);
   }
 
-  // Луна (Земля)
+  // Луна (Земля) — подробная, с рельефом
   let moonPivot = null, moonData = null;
   if (p.moon) {
     moonPivot = new THREE.Group();
     mesh.add(moonPivot);
+    const moonTex = makeTexture('moon');
     const moonMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(p.moon.radius, 24, 24),
-      new THREE.MeshStandardMaterial({ map: makeTexture('moon'), roughness: 1 })
+      new THREE.SphereGeometry(p.moon.radius, 48, 48),
+      new THREE.MeshStandardMaterial({
+        map: moonTex, bumpMap: moonTex, bumpScale: 0.04, roughness: 1,
+      })
     );
     moonMesh.position.x = p.moon.distance;
     moonPivot.add(moonMesh);
@@ -175,7 +167,120 @@ for (const p of PLANETS) {
 }
 
 // ============================================================
-//  Подписи планет (HTML поверх 3D)
+//  Пояс астероидов (между Марсом и Юпитером)
+// ============================================================
+const beltGroup = new THREE.Group();
+systemGroup.add(beltGroup);
+
+const rockMat = new THREE.MeshStandardMaterial({ map: makeTexture('rocky'), roughness: 1 });
+const beltInst = new THREE.InstancedMesh(
+  new THREE.IcosahedronGeometry(0.22, 0), rockMat, ASTEROIDS.count
+);
+const _d = new THREE.Object3D();
+for (let i = 0; i < ASTEROIDS.count; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const r = ASTEROIDS.inner + Math.random() * (ASTEROIDS.outer - ASTEROIDS.inner);
+  _d.position.set(Math.cos(a) * r, (Math.random() - 0.5) * 2.2, Math.sin(a) * r);
+  const s = 0.4 + Math.random() * Math.random() * 2.2;
+  _d.scale.set(s, s * (0.7 + Math.random() * 0.5), s);
+  _d.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+  _d.updateMatrix();
+  beltInst.setMatrixAt(i, _d.matrix);
+}
+beltInst.userData = { body: ASTEROIDS, focusTarget: null };
+beltGroup.add(beltInst);
+clickable.push(beltInst);
+
+// Невидимая точка-«якорь» для подписи и наведения камеры на пояс.
+const beltAnchor = new THREE.Object3D();
+beltAnchor.position.set((ASTEROIDS.inner + ASTEROIDS.outer) / 2, 0, 0);
+beltGroup.add(beltAnchor);
+beltInst.userData.focusTarget = beltAnchor;
+
+// ============================================================
+//  Комета — вытянутая орбита и хвост «от Солнца»
+// ============================================================
+const cometOrbitGroup = new THREE.Group();
+cometOrbitGroup.rotation.x = COMET.tilt;
+systemGroup.add(cometOrbitGroup);
+
+// Орбита-эллипс (Солнце в фокусе).
+(function drawCometOrbit() {
+  const seg = 240, pts = [];
+  const a = COMET.semiMajor, e = COMET.eccentricity;
+  for (let i = 0; i <= seg; i++) {
+    const th = (i / seg) * Math.PI * 2;
+    const r = (a * (1 - e * e)) / (1 + e * Math.cos(th));
+    pts.push(new THREE.Vector3(Math.cos(th) * r, 0, Math.sin(th) * r));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const line = new THREE.LineLoop(geo, new THREE.LineBasicMaterial({
+    color: 0x7fd6ff, transparent: true, opacity: 0.3,
+  }));
+  cometOrbitGroup.add(line);
+})();
+
+const cometNucleus = new THREE.Mesh(
+  new THREE.SphereGeometry(0.55, 24, 24),
+  new THREE.MeshStandardMaterial({ map: makeTexture('comet'), roughness: 1 })
+);
+cometNucleus.userData = { body: COMET };
+cometOrbitGroup.add(cometNucleus);
+clickable.push(cometNucleus);
+
+// Кома — свечение вокруг ядра.
+const cometComa = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: makeGlowTexture('#bfe9ff'), transparent: true,
+  depthWrite: false, blending: THREE.AdditiveBlending,
+}));
+cometComa.scale.set(4, 4, 1);
+cometNucleus.add(cometComa);
+
+// Хвост — цепочка светящихся спрайтов; всегда направлен ОТ Солнца.
+const tailGroup = new THREE.Group();
+systemGroup.add(tailGroup);
+const tailSprites = [];
+const tailTex = makeGlowTexture('#a9e4ff');
+for (let i = 0; i < 10; i++) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tailTex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, opacity: 0.5,
+  }));
+  tailGroup.add(s);
+  tailSprites.push(s);
+}
+let cometTheta = Math.random() * Math.PI * 2;
+
+function updateComet(dt) {
+  const a = COMET.semiMajor, e = COMET.eccentricity;
+  const r = (a * (1 - e * e)) / (1 + e * Math.cos(cometTheta));
+  // Скорость по орбите больше у Солнца (закон сохранения момента ~ 1/r²).
+  const rc = Math.max(r, 22);
+  cometTheta += dt * speed * 90 / (rc * rc);
+  cometNucleus.position.set(Math.cos(cometTheta) * r, 0, Math.sin(cometTheta) * r);
+  cometNucleus.rotation.y += dt * 0.6;
+
+  // Хвост: от Солнца (в мире Солнце в центре systemGroup).
+  const world = new THREE.Vector3();
+  cometNucleus.getWorldPosition(world);
+  const dist = world.length();
+  const antiSun = world.clone().normalize();           // от Солнца к комете → дальше
+  tailGroup.position.copy(world);
+  tailGroup.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), antiSun);
+  // Чем ближе к Солнцу, тем длиннее и ярче хвост.
+  const near = THREE.MathUtils.clamp((110 - dist) / 80, 0.15, 1);
+  for (let i = 0; i < tailSprites.length; i++) {
+    const sp = tailSprites[i];
+    sp.position.x = i * (1.4 + near * 1.8);
+    const sc = (3.2 - i * 0.22) * (0.5 + near);
+    sp.scale.set(sc, sc, 1);
+    sp.material.opacity = (0.55 - i * 0.045) * near;
+  }
+  cometComa.scale.setScalar(2.5 + near * 3);
+}
+
+// ============================================================
+//  Подписи (HTML поверх 3D)
 // ============================================================
 const labelsRoot = document.getElementById('labels');
 const labelEls = new Map();
@@ -188,6 +293,8 @@ function makeLabel(body, target) {
 }
 makeLabel(SUN, sunMesh);
 for (const b of bodies) makeLabel(b.data, b.mesh);
+makeLabel(ASTEROIDS, beltAnchor);
+makeLabel(COMET, cometNucleus);
 
 const _v = new THREE.Vector3();
 function updateLabels() {
@@ -201,8 +308,7 @@ function updateLabels() {
     const y = (-_v.y * 0.5 + 0.5) * window.innerHeight;
     el.style.left = x + 'px';
     el.style.top = y + 'px';
-    // далёкие подписи делаем бледнее
-    el.style.opacity = String(Math.max(0.15, Math.min(1, 260 / dist)));
+    el.style.opacity = String(Math.max(0.15, Math.min(1, 300 / dist)));
   }
 }
 
@@ -244,6 +350,7 @@ const cardTitle = document.getElementById('card-title');
 const cardFact = document.getElementById('card-fact');
 const cardStats = document.getElementById('card-stats');
 let currentBody = null;
+let currentTarget = null;
 
 function showCard(body) {
   currentBody = body;
@@ -265,6 +372,7 @@ function showCard(body) {
 function hideCard() {
   card.classList.add('hidden');
   currentBody = null;
+  currentTarget = null;
   setActiveChip(null);
 }
 
@@ -278,8 +386,7 @@ let flight = null;
 function focusOn(target, body) {
   const targetPos = new THREE.Vector3();
   target.getWorldPosition(targetPos);
-  const r = body.radius || SUN.radius;
-  // Точка обзора чуть в стороне и сверху от планеты.
+  const r = body.focusR || body.radius || SUN.radius;
   const dir = new THREE.Vector3().subVectors(camera.position, targetPos).normalize();
   if (dir.lengthSq() < 0.001) dir.set(0, 0.4, 1).normalize();
   const dist = Math.max(r * 4.5, 9);
@@ -288,24 +395,16 @@ function focusOn(target, body) {
     .add(dir.multiplyScalar(dist))
     .add(new THREE.Vector3(0, r * 1.2, 0));
   flight = {
-    fromCam: camera.position.clone(),
-    toCam: camGoal,
-    fromTarget: controls.target.clone(),
-    toTarget: targetPos.clone(),
-    follow: target,
-    body,
-    t: 0,
+    fromCam: camera.position.clone(), toCam: camGoal,
+    fromTarget: controls.target.clone(), toTarget: targetPos.clone(),
+    follow: target, t: 0,
   };
 }
 function goHome() {
   flight = {
-    fromCam: camera.position.clone(),
-    toCam: HOME_VIEW.clone(),
-    fromTarget: controls.target.clone(),
-    toTarget: new THREE.Vector3(0, 0, 0),
-    follow: null,
-    body: null,
-    t: 0,
+    fromCam: camera.position.clone(), toCam: HOME_VIEW.clone(),
+    fromTarget: controls.target.clone(), toTarget: new THREE.Vector3(0, 0, 0),
+    follow: null, t: 0,
   };
 }
 const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -314,6 +413,7 @@ const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 //  Выбор тела (клик / кнопка)
 // ============================================================
 function selectBody(target, body, { fly = true } = {}) {
+  currentTarget = target;
   if (fly) focusOn(target, body);
   showCard(body);
 }
@@ -324,10 +424,10 @@ let downXY = null;
 
 canvas.addEventListener('pointerdown', e => { downXY = { x: e.clientX, y: e.clientY }; });
 canvas.addEventListener('pointerup', e => {
-  if (!downXY) return;
+  if (!downXY || inDemo) { downXY = null; return; }
   const moved = Math.hypot(e.clientX - downXY.x, e.clientY - downXY.y);
   downXY = null;
-  if (moved > 8) return; // это было вращение, а не клик
+  if (moved > 8) return;
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
@@ -335,12 +435,14 @@ canvas.addEventListener('pointerup', e => {
   if (hits.length) {
     endTour();
     const obj = hits[0].object;
-    selectBody(obj, obj.userData.body);
+    const body = obj.userData.body;
+    const target = obj.userData.focusTarget || obj;
+    selectBody(target, body);
   }
 });
 
 // ============================================================
-//  Нижнее меню планет
+//  Нижнее меню планет (+ комета и пояс астероидов)
 // ============================================================
 const planetBar = document.getElementById('planet-bar');
 const chips = new Map();
@@ -355,6 +457,8 @@ function addChip(body, target) {
 }
 addChip(SUN, sunMesh);
 for (const b of bodies) addChip(b.data, b.mesh);
+addChip(ASTEROIDS, beltAnchor);
+addChip(COMET, cometNucleus);
 
 function setActiveChip(id) {
   for (const [cid, el] of chips) el.classList.toggle('active', cid === id);
@@ -393,16 +497,16 @@ speedSlider.oninput = () => { speed = (speedSlider.value / 100) * 1.0; };
 speed = (speedSlider.value / 100) * 1.0;
 
 // ============================================================
-//  Режим «Путешествие» — по очереди показываем все тела
+//  Режим «Путешествие»
 // ============================================================
 let tour = null;
-const tourList = [sunMesh, ...bodies.map(b => b.mesh)];
-const tourBodies = [SUN, ...bodies.map(b => b.data)];
+const tourList = [sunMesh, ...bodies.map(b => b.mesh), beltAnchor, cometNucleus];
+const tourBodies = [SUN, ...bodies.map(b => b.data), ASTEROIDS, COMET];
 
 btnTour.onclick = () => { tour ? endTour() : startTour(); };
 
 function startTour() {
-  tour = { i: -1, timer: 0, delay: 0 };
+  tour = { i: -1, timer: 0 };
   btnTour.classList.add('off');
   btnTour.querySelector('.lbl').textContent = 'Стоп';
   nextTourStop();
@@ -410,9 +514,9 @@ function startTour() {
 function nextTourStop() {
   if (!tour) return;
   tour.i++;
-  if (tour.i >= tourList.length) { endTour(); goHome(); return;}
+  if (tour.i >= tourList.length) { endTour(); goHome(); return; }
   selectBody(tourList[tour.i], tourBodies[tour.i]);
-  tour.timer = 6.5; // секунд на каждую планету
+  tour.timer = 6.5;
 }
 function endTour() {
   if (!tour) return;
@@ -420,6 +524,63 @@ function endTour() {
   btnTour.classList.remove('off');
   btnTour.querySelector('.lbl').textContent = 'Путешествие';
 }
+
+// ============================================================
+//  Космические явления (затмения, фазы Луны)
+// ============================================================
+const demos = createDemos({ scene, camera, controls, lights: { sunLight, ambient }, speak: t => speech.say(t) });
+
+const eventsMenu = document.getElementById('events-menu');
+const demoBar = document.getElementById('demo-bar');
+const demoTitle = document.getElementById('demo-title');
+const demoPhase = document.getElementById('demo-phase');
+const btnEvents = document.getElementById('btn-events');
+const topbar = document.getElementById('topbar');
+let inDemo = false;
+let currentPhenomenon = null;
+
+// наполняем меню
+for (const ph of PHENOMENA) {
+  const b = document.createElement('button');
+  b.className = 'event-btn';
+  b.innerHTML = `<span class="big">${ph.emoji}</span><span>${ph.name}</span>`;
+  b.onclick = () => { closeEvents(); enterDemo(ph); };
+  eventsMenu.appendChild(b);
+}
+
+function openEvents() { eventsMenu.classList.remove('hidden'); }
+function closeEvents() { eventsMenu.classList.add('hidden'); }
+btnEvents.onclick = () => eventsMenu.classList.contains('hidden') ? openEvents() : closeEvents();
+
+function enterDemo(ph) {
+  inDemo = true;
+  currentPhenomenon = ph;
+  endTour();
+  hideCard();
+  systemGroup.visible = false;
+  labelsRoot.classList.add('hidden');
+  topbar.classList.add('hidden');
+  planetBar.classList.add('hidden');
+  demoTitle.textContent = ph.name;
+  demoPhase.textContent = '';
+  demoBar.classList.remove('hidden');
+  speech.say(ph.intro);
+  demos.start(ph.id);
+}
+
+function exitDemo() {
+  inDemo = false;
+  demos.stop();
+  systemGroup.visible = true;
+  labelsRoot.classList.remove('hidden');
+  topbar.classList.remove('hidden');
+  planetBar.classList.remove('hidden');
+  demoBar.classList.add('hidden');
+  goHome();
+}
+
+document.getElementById('demo-back').onclick = exitDemo;
+document.getElementById('demo-say').onclick = () => { if (currentPhenomenon) speech.say(currentPhenomenon.intro); };
 
 // ============================================================
 //  Анимация
@@ -430,7 +591,13 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // Движение планет по орбитам и вращение вокруг оси.
+  if (inDemo) {
+    const label = demos.update(dt); // камера управляется внутри сценки
+    if (label) demoPhase.textContent = label;
+    renderer.render(scene, camera);
+    return;
+  }
+
   if (running) {
     for (const b of bodies) {
       b.angle += b.data.orbitSpeed * speed * dt * 0.5;
@@ -439,28 +606,25 @@ function animate() {
       if (b.moonPivot) b.moonPivot.rotation.y += b.moonData.speed * dt * (0.4 + speed);
     }
     sunMesh.rotation.y += dt * 0.05;
+    beltGroup.rotation.y += dt * speed * 0.06;
+    updateComet(dt);
+  } else {
+    updateComet(0); // держим хвост направленным от Солнца даже на паузе
   }
 
-  // Полёт камеры.
   if (flight) {
     flight.t = Math.min(1, flight.t + dt / 1.1);
     const e = easeInOut(flight.t);
-    // если следим за движущейся планетой — обновляем цель
     if (flight.follow) flight.follow.getWorldPosition(flight.toTarget);
     camera.position.lerpVectors(flight.fromCam, flight.toCam, e);
     controls.target.lerpVectors(flight.fromTarget, flight.toTarget, e);
     if (flight.t >= 1) flight = null;
-  } else if (currentBody && currentBody.id !== 'sun') {
-    // Мягко держим камеру на выбранной движущейся планете.
-    const b = bodies.find(x => x.data.id === currentBody.id);
-    if (b) {
-      const wp = new THREE.Vector3();
-      b.mesh.getWorldPosition(wp);
-      controls.target.lerp(wp, 0.08);
-    }
+  } else if (currentTarget && currentBody && currentBody.id !== 'sun' && currentBody.id !== 'belt') {
+    const wp = new THREE.Vector3();
+    currentTarget.getWorldPosition(wp);
+    controls.target.lerp(wp, 0.08);
   }
 
-  // Режим путешествия.
   if (tour && flight === null) {
     tour.timer -= dt;
     if (tour.timer <= 0) nextTourStop();
@@ -488,8 +652,6 @@ function start() {
   loader.classList.add('hide');
   setTimeout(() => loader.remove(), 700);
   animate();
-  // Приветствие — но только после первого касания экрана,
-  // потому что браузеры блокируют звук без действия пользователя.
 }
 let greeted = false;
 function greetOnce() {

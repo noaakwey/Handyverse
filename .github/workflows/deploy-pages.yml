@@ -32,6 +32,10 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Автоматически включаем GitHub Pages, если они ещё не включены,
+          # чтобы не настраивать вручную в Settings.
+          enablement: true
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v3

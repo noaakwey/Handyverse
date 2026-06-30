@@ -42,6 +42,9 @@
     <button id="btn-tour" class="ctrl-btn" title="Путешествие по планетам" aria-label="Путешествие">
       <span class="ico">🎬</span><span class="lbl">Путешествие</span>
     </button>
+    <button id="btn-events" class="ctrl-btn" title="Космические явления" aria-label="Явления">
+      <span class="ico">🌗</span><span class="lbl">Явления</span>
+    </button>
     <button id="btn-sound" class="ctrl-btn" title="Звук" aria-label="Звук">
       <span class="ico">🔊</span><span class="lbl">Звук</span>
     </button>
@@ -61,6 +64,19 @@
     <p id="card-fact">Факт</p>
     <div id="card-stats"></div>
     <button id="card-say" class="say-btn">🔊 Рассказать ещё раз</button>
+  </section>
+
+  <!-- Меню космических явлений -->
+  <div id="events-menu" class="hidden" role="menu" aria-label="Космические явления"></div>
+
+  <!-- Панель режима явления (затмения, фазы Луны) -->
+  <section id="demo-bar" class="hidden">
+    <button id="demo-back" aria-label="Назад в космос">⬅️ В космос</button>
+    <div class="demo-text">
+      <span id="demo-title">Явление</span>
+      <span id="demo-phase"></span>
+    </div>
+    <button id="demo-say" class="say-btn small" aria-label="Повторить">🔊</button>
   </section>
 
   <!-- Нижнее меню планет -->
