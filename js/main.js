@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SUN, PLANETS, ASTEROIDS, COMET, PHENOMENA, WELCOME } from './data.js';
-import { makeTexture, makeRingTexture, makeGlowTexture, makeTailTexture } from './textures.js';
+import { makeTexture, makeRingTexture, makeGlowTexture, makeTailTexture, makeEarthMaps } from './textures.js';
 import { createDemos } from './demos.js';
 
 // ============================================================
@@ -29,9 +29,11 @@ controls.target.set(0, 0, 0);
 
 // Свет: Солнце светит во все стороны + мягкий общий свет, чтобы планеты
 // не были полностью чёрными с теневой стороны.
-const sunLight = new THREE.PointLight(0xffffff, 3.2, 0, 0.6);
+const sunLight = new THREE.PointLight(0xffffff, 4.4, 0, 0.55);
 scene.add(sunLight);
-const ambient = new THREE.AmbientLight(0x6677aa, 0.72);
+// Чуть приглушенный общий свет — так у вращающихся планет виден день и
+// ночь, но тёмная сторона всё равно не становится совсем чёрной и страшной.
+const ambient = new THREE.AmbientLight(0x6677aa, 0.58);
 scene.add(ambient);
 
 // Всё «солнечное» складываем в одну группу — её удобно прятать на время
@@ -114,11 +116,21 @@ for (const p of PLANETS) {
   const orbit = new THREE.Group();
   systemGroup.add(orbit);
 
-  const texType = p.texture === 'ice' ? 'ice' : p.texture;
-  const tex = makeTexture(texType, p.color);
-  const mat = new THREE.MeshStandardMaterial({
-    map: tex, bumpMap: tex, bumpScale: 0.015, roughness: 1, metalness: 0,
-  });
+  let mat;
+  if (p.id === 'earth') {
+    // Земля: отдельная пара карт (цвет + шероховатость) — океан гладкий
+    // и блестящий, суша матовая, как на настоящей планете.
+    const { map, roughnessMap } = makeEarthMaps();
+    mat = new THREE.MeshStandardMaterial({
+      map, roughnessMap, metalness: 0,
+    });
+  } else {
+    const texType = p.texture === 'ice' ? 'ice' : p.texture;
+    const tex = makeTexture(texType, p.color);
+    mat = new THREE.MeshStandardMaterial({
+      map: tex, bumpMap: tex, bumpScale: 0.015, roughness: 1, metalness: 0,
+    });
+  }
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius, 48, 48), mat);
   mesh.position.x = p.distance;
   mesh.userData = { body: p };
@@ -146,7 +158,7 @@ for (const p of PLANETS) {
     mesh.add(ring);
   }
 
-  // Облака (Земля) — отдельная полупрозрачная сфера чуть крупнее планеты.
+  // Облака и голубая дымка атмосферы (Земля) — отдельные слои поверх планеты.
   let clouds = null;
   if (p.id === 'earth') {
     clouds = new THREE.Mesh(
@@ -156,6 +168,13 @@ for (const p of PLANETS) {
       })
     );
     mesh.add(clouds);
+
+    const atmosphere = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeGlowTexture('#7ec8ff'), transparent: true,
+      depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55,
+    }));
+    atmosphere.scale.setScalar(p.radius * 3.1);
+    mesh.add(atmosphere);
   }
 
   // Луна (Земля) — подробная, с рельефом

@@ -3,9 +3,10 @@
 // специально выстраиваем тела так, чтобы наглядно показать, ПОЧЕМУ так бывает.
 
 import * as THREE from 'three';
-import { makeTexture, makeGlowTexture } from './textures.js';
+import { makeTexture, makeGlowTexture, makeEarthMaps } from './textures.js';
 
 const SUN_X = -52; // Солнце всегда слева
+const SEASON_TILT = 0.41; // наклон оси Земли (~23.5°), как в жизни
 
 export function createDemos({ scene, camera, controls, lights, speak }) {
   const group = new THREE.Group();
@@ -33,13 +34,29 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
   group.add(sunLight.target);
 
   // --- Земля ---
+  const earthMaps = makeEarthMaps();
   const earth = new THREE.Mesh(
     new THREE.SphereGeometry(3, 64, 64),
     new THREE.MeshStandardMaterial({
-      map: makeTexture('earth'), roughness: 1, metalness: 0,
+      map: earthMaps.map, roughnessMap: earthMaps.roughnessMap, metalness: 0,
     })
   );
   group.add(earth);
+
+  const earthClouds = new THREE.Mesh(
+    new THREE.SphereGeometry(3.05, 48, 48),
+    new THREE.MeshStandardMaterial({
+      map: makeTexture('clouds'), transparent: true, depthWrite: false, roughness: 1,
+    })
+  );
+  earth.add(earthClouds);
+
+  const earthAtmosphere = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeGlowTexture('#7ec8ff'), transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5,
+  }));
+  earthAtmosphere.scale.setScalar(9.5);
+  earth.add(earthAtmosphere);
 
   // --- Луна (подробная, с рельефом) ---
   const moonTex = makeTexture('moon');
@@ -56,15 +73,20 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
   const shadowCone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 32, 1, true), shadowMat);
   group.add(shadowCone);
 
-  // Тёмное пятно (тень Луны на Земле при солнечном затмении).
+  // Тёмное пятно (тень Луны на Земле при солнечном затмении) — мягкий
+  // радиальный градиент вместо чёткого круга, чтобы было похоже на тень,
+  // а не на наклейку.
   const umbra = new THREE.Mesh(
-    new THREE.CircleGeometry(0.7, 32),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.7 })
+    new THREE.CircleGeometry(2.2, 40),
+    new THREE.MeshBasicMaterial({
+      map: makeGlowTexture('#000000'), color: 0x000000, transparent: true,
+      opacity: 0.85, depthWrite: false,
+    })
   );
   group.add(umbra);
 
   // Маленькие подписи-спрайты («Земля», «Луна», «Солнце»).
-  function makeTag(text) {
+  function makeTag(text, sx, sy) {
     const c = document.createElement('canvas');
     c.width = 256; c.height = 64;
     const g = c.getContext('2d');
@@ -74,13 +96,68 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
     g.strokeText(text, 128, 34); g.fillStyle = '#fff'; g.fillText(text, 128, 34);
     const tex = new THREE.CanvasTexture(c);
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-    spr.scale.set(10, 2.5, 1);
+    spr.scale.set(sx || 10, sy || 2.5, 1);
     group.add(spr);
     return spr;
   }
   const tagSun = makeTag('Солнце');
   const tagEarth = makeTag('Земля');
   const tagMoon = makeTag('Луна');
+  // День/Ночь показываются при близкой камере — спрайт нужен мельче,
+  // чем у остальных подписей (те видны издалека).
+  const tagDay = makeTag('День ☀️', 4.5, 1.1);
+  const tagNight = makeTag('Ночь 🌙', 4.5, 1.1);
+
+  // Маленькая яркая звезда-метка, приклеенная к поверхности Земли — по ней
+  // хорошо видно, как день сменяется ночью при вращении планеты. Рисуем
+  // её сами (не эмодзи), чтобы выглядела одинаково на любом устройстве.
+  function makeStarMarker(size) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.translate(64, 64);
+    g.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a1 = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const a2 = a1 + Math.PI / 5;
+      g.lineTo(Math.cos(a1) * 50, Math.sin(a1) * 50);
+      g.lineTo(Math.cos(a2) * 22, Math.sin(a2) * 22);
+    }
+    g.closePath();
+    g.fillStyle = '#ffce45'; g.fill();
+    g.lineWidth = 7; g.strokeStyle = '#a86a00'; g.stroke();
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    spr.scale.set(size, size, 1);
+    return spr;
+  }
+  const dayNightMarker = makeStarMarker(1.3);
+  dayNightMarker.position.set(3.2, 0, 0);
+  earth.add(dayNightMarker);
+  dayNightMarker.visible = false;
+
+  // Тонкая ось вращения Земли — видна только в сценке «Времена года»,
+  // чтобы было заметно, что Земля стоит немного «набок».
+  const axisLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -4.4, 0), new THREE.Vector3(0, 4.4, 0)]),
+    new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 })
+  );
+  earth.add(axisLine);
+  axisLine.visible = false;
+
+  // Орбита Земли вокруг Солнца — видна только в сценке «Времена года».
+  const SEASON_R = 16;
+  const seasonOrbitPts = [];
+  for (let i = 0; i <= 96; i++) {
+    const a = (i / 96) * Math.PI * 2;
+    seasonOrbitPts.push(new THREE.Vector3(SUN_X + Math.cos(a) * SEASON_R, 0, Math.sin(a) * SEASON_R));
+  }
+  const seasonOrbit = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(seasonOrbitPts),
+    new THREE.LineBasicMaterial({ color: 0x7fa0ff, transparent: true, opacity: 0.3 })
+  );
+  group.add(seasonOrbit);
+  seasonOrbit.visible = false;
 
   // Камера в сценках управляется вручную (без OrbitControls), чтобы точно
   // показать нужный ракурс. В начале — плавный «подлёт».
@@ -99,8 +176,13 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
 
   const state = { id: null, t: 0 };
   const _v = new THREE.Vector3();
+  const _oc = new THREE.Vector3();
+  const _dir = new THREE.Vector3();
+  const _hit = new THREE.Vector3();
+  const _normal = new THREE.Vector3();
   const tmpQ = new THREE.Quaternion();
   const UP = new THREE.Vector3(0, 1, 0);
+  const sunPos = new THREE.Vector3(SUN_X, 0, 0);
 
   function orient(cone, from, to, baseR, tipR) {
     // ставим конус так, чтобы основание было у from, остриё у to
@@ -116,6 +198,19 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
   function hideExtras() {
     shadowCone.visible = false;
     umbra.visible = false;
+  }
+
+  // Сброс общих частей сцены перед каждой новой сценкой — иначе
+  // настройки одной сценки («наклон» Земли, скрытая Луна и т.п.)
+  // могли бы остаться видны в следующей.
+  function resetShared() {
+    earth.rotation.set(0, 0, 0);
+    moon.visible = true;
+    tagDay.visible = false;
+    tagNight.visible = false;
+    dayNightMarker.visible = false;
+    axisLine.visible = false;
+    seasonOrbit.visible = false;
   }
 
   const layouts = {
@@ -137,7 +232,9 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
       tagEarth.position.set(14, 6, 0);
       tagMoon.visible = true;
       sunLight.target.position.copy(earth.position);
-      setView(6, 16, 26, 8, 0, 0);
+      // Невысокая, почти лицевая камера — так тёмное пятно тени хорошо
+      // видно на диске Земли, а не сжимается в полоску от острого ракурса.
+      setView(-4, 5, 24, 12, 0, 0);
       controls.minDistance = 8; controls.maxDistance = 90;
     },
     lunar() {
@@ -150,6 +247,35 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
       sunLight.target.position.set(0, 0, 0);
       setView(2, 12, 30, 12, 0, 0);
       controls.minDistance = 8; controls.maxDistance = 90;
+    },
+    daynight() {
+      earth.visible = true;
+      earth.position.set(0, 0, 0);
+      moon.visible = false;
+      tagEarth.visible = false;
+      tagMoon.visible = false;
+      tagSun.position.set(SUN_X + 9, 7, 0);
+      tagDay.visible = true;
+      tagNight.visible = true;
+      tagDay.position.set(-6, 4.6, 2);
+      tagNight.position.set(6, 4.6, 2);
+      dayNightMarker.visible = true;
+      sunLight.target.position.set(0, 0, 0);
+      setView(3, 4, 13, 0, 0, 0);
+      controls.minDistance = 6; controls.maxDistance = 60;
+    },
+    seasons() {
+      earth.visible = true;
+      moon.visible = false;
+      tagEarth.visible = false;
+      tagMoon.visible = false;
+      tagSun.position.set(SUN_X, 9, 0);
+      axisLine.visible = true;
+      seasonOrbit.visible = true;
+      // свет всегда направлен на Землю — а она движется по орбите,
+      // поэтому цель света обновляется каждый кадр в update()
+      setView(SUN_X + 18, 16, 36, SUN_X, 0, 0);
+      controls.minDistance = 10; controls.maxDistance = 120;
     },
   };
 
@@ -170,6 +296,7 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
     // приглушаем «солнечный» свет основной системы — здесь свой
     lights.sunLight.visible = false;
     lights.ambient.intensity = 0.18;
+    resetShared();
     layouts[id]();
     controls.enabled = false; // камеру ведём вручную
   }
@@ -178,7 +305,7 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
     state.id = null;
     group.visible = false;
     lights.sunLight.visible = true;
-    lights.ambient.intensity = 0.72;
+    lights.ambient.intensity = 0.58;
     controls.enabled = true;
     controls.minDistance = 9;
     controls.maxDistance = 320;
@@ -205,24 +332,40 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
     }
 
     else if (state.id === 'solar') {
-      // Луна скользит к линии Солнце–Земля; в момент совпадения — затмение
-      const z = Math.cos(state.t * 0.6) * 6; // ходит туда-сюда через ось
+      // Луна медленно качается поперёк линии Солнце–Земля; когда она
+      // оказывается точно на этой линии — её тень дотягивается до Земли.
+      const z = Math.cos(state.t * 0.32) * 7.5;
       moon.position.set(6, 0, z);
       moon.rotation.y += dt * 0.3;
-      const aligned = Math.abs(z) < 0.7;
-      // тень-конус от Луны к Земле
+
+      // Настоящий луч от Солнца через Луну, продолженный дальше —
+      // считаем, пересекает ли он шар Земли, и если да — где именно.
+      _dir.subVectors(moon.position, sunPos).normalize();
       shadowCone.visible = true;
-      orient(shadowCone, moon.position, new THREE.Vector3(11, 0, 0), 0.6, 0.1);
-      shadowMat.opacity = aligned ? 0.45 : 0.18;
-      // пятно тени на Земле (на стороне, обращённой к Солнцу: -X)
-      umbra.visible = aligned;
-      if (aligned) {
-        umbra.position.set(14 - 3.02, 0, 0);
-        umbra.rotation.set(0, -Math.PI / 2, 0);
-        umbra.material.opacity = 0.75 * (1 - Math.abs(z) / 0.7);
+      _hit.copy(moon.position).addScaledVector(_dir, 18);
+      orient(shadowCone, moon.position, _hit, 0.6, 0);
+
+      const earthR = 3;
+      _oc.subVectors(moon.position, earth.position);
+      const b = _oc.dot(_dir);
+      const distSq = _oc.lengthSq() - b * b; // квадрат расстояния от центра Земли до луча
+      const dist = Math.sqrt(Math.max(0, distSq));
+      const hits = dist < earthR;
+      shadowMat.opacity = hits ? 0.5 : 0.16;
+
+      umbra.visible = hits;
+      if (hits) {
+        const t = -b - Math.sqrt(Math.max(0, earthR * earthR - distSq));
+        _hit.copy(moon.position).addScaledVector(_dir, t);
+        _normal.subVectors(_hit, earth.position).normalize();
+        umbra.position.copy(_hit).addScaledVector(_normal, 0.06);
+        umbra.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), _normal);
+        const fade = 1 - dist / earthR; // 1 = в самом центре, 0 = у края
+        umbra.material.opacity = 0.3 + fade * 0.6;
+        umbra.scale.setScalar(0.6 + fade * 0.5);
       }
-      label = aligned ? 'Тень Луны падает на Землю — затмение! 🌑'
-                      : 'Луна подлетает к Солнцу…';
+      label = hits ? 'Тень Луны падает на Землю — затмение! 🌑'
+                   : 'Луна подлетает к линии Солнца…';
     }
 
     else if (state.id === 'lunar') {
@@ -239,6 +382,35 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
       moonMat.color.setRGB(1 - red * 0.1, 1 - red * 0.65, 1 - red * 0.75);
       label = inShadow ? 'Луна в тени Земли — она краснеет! 🔴'
                        : 'Луна подлетает к тени Земли…';
+    }
+
+    else if (state.id === 'daynight') {
+      // Земля крутится на месте — видно, как солнечная сторона (день)
+      // сменяется тёмной (ночь).
+      earth.rotation.y += dt * 0.35;
+      _dir.set(1, 0, 0).applyQuaternion(earth.quaternion); // куда сейчас смотрит «домик»
+      _normal.subVectors(sunPos, earth.position).normalize(); // направление на Солнце
+      const isDay = _dir.dot(_normal) > 0.08;
+      label = isDay ? 'Тут сейчас день ☀️' : 'Тут сейчас ночь 🌙';
+    }
+
+    else if (state.id === 'seasons') {
+      // Земля медленно облетает Солнце; ось наклона остаётся неизменной
+      // в пространстве — поэтому то один, то другой полюс ближе к свету.
+      const orbitA = state.t * 0.12;
+      earth.position.set(SUN_X + Math.cos(orbitA) * SEASON_R, 0, Math.sin(orbitA) * SEASON_R);
+      earth.rotation.z = SEASON_TILT;
+      earth.rotation.y += dt * 0.5;
+      sunLight.target.position.copy(earth.position);
+
+      // Направление «на север» (ось наклона) неизменно в пространстве —
+      // считаем его один раз через тот же наклон.
+      _dir.set(-Math.sin(SEASON_TILT), Math.cos(SEASON_TILT), 0);
+      _normal.subVectors(sunPos, earth.position).normalize();
+      const tilt = _dir.dot(_normal);
+      if (tilt > 0.18) label = 'Лето на севере ☀️ — зима на юге ❄️';
+      else if (tilt < -0.18) label = 'Зима на севере ❄️ — лето на юге ☀️';
+      else label = 'Весна или осень 🌸 — везде похожая погода';
     }
 
     // подписи всегда чуть выше тел

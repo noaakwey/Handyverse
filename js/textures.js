@@ -349,6 +349,124 @@ export function makeTexture(type, color) {
   return tex;
 }
 
+// Гладкий замкнутый контур из «полуоблачных» точек — по таким контурам
+// рисуем материки сразу на двух холстах (цвет + карта шероховатости),
+// чтобы их форма точно совпадала на обеих текстурах.
+function continentPoints(cx, cy, r, wobble, n) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const rr = r * (1 + Math.sin(a * 3 + cx * 0.01) * 0.18 + (Math.random() - 0.5) * wobble);
+    pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.62]);
+  }
+  return pts;
+}
+function drawSmoothBlob(ctx, pts, fill) {
+  ctx.beginPath();
+  const last = pts[pts.length - 1], first = pts[0];
+  ctx.moveTo((first[0] + last[0]) / 2, (first[1] + last[1]) / 2);
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], pn = pts[(i + 1) % pts.length];
+    ctx.quadraticCurveTo(p[0], p[1], (p[0] + pn[0]) / 2, (p[1] + pn[1]) / 2);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+// Земля: рисуем сразу пару текстур — цвет и карту шероховатости (по одним
+// и тем же контурам материков), чтобы океан был гладким и блестящим,
+// а суша — матовой. Так Земля выглядит гораздо реалистичнее.
+let earthMapsCache = null;
+export function makeEarthMaps() {
+  if (earthMapsCache) return earthMapsCache;
+  const w = 2048, h = 1024;
+  const cCanvas = makeCanvas(w, h), rCanvas = makeCanvas(w, h);
+  const cctx = cCanvas.getContext('2d'), rctx = rCanvas.getContext('2d');
+
+  // Океан: цвет — с лёгким градиентом по глубине; шероховатость — низкая
+  // (даёт гладкий, блестящий отклик света — настоящие блики на воде).
+  const ocean = cctx.createLinearGradient(0, 0, 0, h);
+  ocean.addColorStop(0, '#1c4f9e');
+  ocean.addColorStop(0.5, '#1f72d6');
+  ocean.addColorStop(1, '#163f82');
+  cctx.fillStyle = ocean; cctx.fillRect(0, 0, w, h);
+  rctx.fillStyle = '#8c8c8c'; rctx.fillRect(0, 0, w, h);
+
+  // Крупные узнаваемые материки — большие гладкие силуэты, расставленные
+  // примерно как на настоящей карте мира (не идеально, но узнаваемо).
+  const continents = [
+    { cx: w * 0.16, cy: h * 0.28, r: 110, terrain: '#3f9e4c' },  // Северная Америка
+    { cx: w * 0.27, cy: h * 0.64, r: 80, terrain: '#caa860' },   // Южная Америка
+    { cx: w * 0.50, cy: h * 0.24, r: 64, terrain: '#5c8f3a' },   // Европа
+    { cx: w * 0.55, cy: h * 0.52, r: 120, terrain: '#cdaa5c' },  // Африка
+    { cx: w * 0.73, cy: h * 0.28, r: 145, terrain: '#4a9650' },  // Азия
+    { cx: w * 0.85, cy: h * 0.70, r: 58, terrain: '#3f9e4c' },   // Австралия
+  ];
+
+  for (const c of continents) {
+    const pts = continentPoints(c.cx, c.cy, c.r, 0.22, 18);
+    drawSmoothBlob(cctx, pts, c.terrain);
+    drawSmoothBlob(rctx, pts, '#d8d4c8'); // суша матовая (высокая шероховатость)
+
+    // Лёгкая текстура рельефа внутри материка: пустыни, леса, горы —
+    // только на цветной карте, обрезано по контуру материка.
+    cctx.save();
+    cctx.beginPath();
+    const last = pts[pts.length - 1], first = pts[0];
+    cctx.moveTo((first[0] + last[0]) / 2, (first[1] + last[1]) / 2);
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], pn = pts[(i + 1) % pts.length];
+      cctx.quadraticCurveTo(p[0], p[1], (p[0] + pn[0]) / 2, (p[1] + pn[1]) / 2);
+    }
+    cctx.closePath();
+    cctx.clip();
+    speckle(cctx, w, h, 220, ['#2b8a3e', '#caa86a', '#7a5a32', '#6fae4a'], 4, 16, 0.22);
+    // горные хребты — тёмные изогнутые штрихи
+    for (let m = 0; m < 3; m++) {
+      cctx.beginPath();
+      cctx.strokeStyle = 'rgba(90,70,50,0.35)';
+      cctx.lineWidth = 4;
+      let mx = c.cx + (Math.random() - 0.5) * c.r, my = c.cy + (Math.random() - 0.5) * c.r;
+      cctx.moveTo(mx, my);
+      for (let s = 0; s < 5; s++) {
+        mx += (Math.random() - 0.5) * c.r * 0.5;
+        my += (Math.random() - 0.5) * c.r * 0.3;
+        cctx.lineTo(mx, my);
+      }
+      cctx.stroke();
+    }
+    cctx.restore();
+  }
+
+  // Прибрежные мелководья — светлая узкая кайма (только цвет).
+  for (const c of continents) {
+    const pts = continentPoints(c.cx, c.cy, c.r * 1.08, 0.2, 18);
+    cctx.save();
+    cctx.globalAlpha = 0.25;
+    drawSmoothBlob(cctx, pts, '#3fa0e0');
+    cctx.restore();
+  }
+
+  // Полярные шапки — яркие и на цвете, и в меру шероховатые (рыхлый снег).
+  cctx.globalAlpha = 0.92; cctx.fillStyle = '#f3f9ff';
+  cctx.fillRect(0, 0, w, h * 0.045);
+  cctx.fillRect(0, h * 0.955, w, h * 0.045);
+  cctx.globalAlpha = 1;
+  rctx.fillStyle = '#b8b8b8';
+  rctx.fillRect(0, 0, w, h * 0.045);
+  rctx.fillRect(0, h * 0.955, w, h * 0.045);
+
+  const map = new THREE.CanvasTexture(cCanvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 8;
+  const roughnessMap = new THREE.CanvasTexture(rCanvas);
+  roughnessMap.anisotropy = 8;
+
+  earthMapsCache = { map, roughnessMap };
+  return earthMapsCache;
+}
+
 // Мягкая радиальная «капля» света — для свечения комы кометы и Солнца.
 export function makeGlowTexture(color = '#bfe3ff') {
   const s = 256;
