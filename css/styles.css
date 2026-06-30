@@ -351,6 +351,38 @@ html, body {
 #demo-phase { font-size: 15px; opacity: 0.9; }
 .say-btn.small { padding: 12px 14px; font-size: 20px; flex-shrink: 0; }
 
+/* ---------- Стикер-посвящение ---------- */
+#dedication {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 15;
+  padding: 8px 14px;
+  background: rgba(22, 16, 51, 0.7);
+  border: 2px solid rgba(255, 211, 77, 0.55);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px #000;
+  transform: rotate(-4deg);
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+#dedication .heart {
+  display: inline-block;
+  animation: heartbeat 1.4s ease-in-out infinite;
+}
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.25); }
+  40% { transform: scale(0.95); }
+}
+@media (max-width: 600px) {
+  #dedication { font-size: 11px; padding: 6px 10px; bottom: 10px; left: 10px; }
+}
+
 .hidden { display: none !important; }
 
 /* ---------- Адаптив для маленьких экранов ---------- */

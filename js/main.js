@@ -146,6 +146,18 @@ for (const p of PLANETS) {
     mesh.add(ring);
   }
 
+  // Облака (Земля) — отдельная полупрозрачная сфера чуть крупнее планеты.
+  let clouds = null;
+  if (p.id === 'earth') {
+    clouds = new THREE.Mesh(
+      new THREE.SphereGeometry(p.radius * 1.018, 48, 48),
+      new THREE.MeshStandardMaterial({
+        map: makeTexture('clouds'), transparent: true, depthWrite: false, roughness: 1,
+      })
+    );
+    mesh.add(clouds);
+  }
+
   // Луна (Земля) — подробная, с рельефом
   let moonPivot = null, moonData = null;
   if (p.moon) {
@@ -163,7 +175,7 @@ for (const p of PLANETS) {
     moonData = p.moon;
   }
 
-  bodies.push({ data: p, orbit, mesh, moonPivot, moonData, angle: Math.random() * Math.PI * 2 });
+  bodies.push({ data: p, orbit, mesh, moonPivot, moonData, clouds, angle: Math.random() * Math.PI * 2 });
 }
 
 // ============================================================
@@ -318,23 +330,44 @@ function updateLabels() {
 const speech = {
   on: true,
   voice: null,
+  gen: 0,
+  // Выбираем самый «живой» русский голос из доступных в браузере/ОС.
+  // Сначала пробуем качественные сетевые/нейронные голоса (Google, Microsoft
+  // Online, "Neural"/"Enhanced"/"Premium"), затем известные приятные имена,
+  // и только потом — любой русский голос, какой найдётся.
   pick() {
-    const voices = speechSynthesis.getVoices();
+    const voices = speechSynthesis.getVoices().filter(v => /^ru/i.test(v.lang));
+    const byPattern = (re) => voices.find(v => re.test(v.name));
     this.voice =
-      voices.find(v => /ru[-_]RU/i.test(v.lang) && /female|женск|milena|alyona|google/i.test(v.name)) ||
-      voices.find(v => /^ru/i.test(v.lang)) || null;
+      byPattern(/google/i) ||
+      byPattern(/neural|enhanced|premium|online|natural/i) ||
+      byPattern(/milena|alyona|алёна|irina|ирина|katya|катя/i) ||
+      voices[0] || null;
   },
   say(text) {
-    if (!this.on || !('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'ru-RU';
-    if (this.voice) u.voice = this.voice;
-    u.rate = 0.95;
-    u.pitch = 1.15;
-    speechSynthesis.speak(u);
+    this.gen++;
+    const myGen = this.gen;
+    if (!this.on) return;
+    // Разбиваем на предложения и произносим по очереди с короткой паузой —
+    // звучит плавнее и естественнее, чем одна длинная фраза разом.
+    const sentences = text.split(/(?<=[.!?…])\s+/).filter(Boolean);
+    let i = 0;
+    const speakNext = () => {
+      if (myGen !== this.gen || i >= sentences.length) return;
+      const u = new SpeechSynthesisUtterance(sentences[i]);
+      u.lang = 'ru-RU';
+      if (this.voice) u.voice = this.voice;
+      u.rate = 0.98;
+      u.pitch = 1.04;
+      u.volume = 1;
+      u.onend = () => { if (myGen !== this.gen) return; i++; setTimeout(speakNext, 160); };
+      speechSynthesis.speak(u);
+    };
+    speakNext();
   },
-  stop() { if ('speechSynthesis' in window) speechSynthesis.cancel(); },
+  stop() { this.gen++; if ('speechSynthesis' in window) speechSynthesis.cancel(); },
 };
 if ('speechSynthesis' in window) {
   speech.pick();
@@ -503,7 +536,7 @@ let tour = null;
 const tourList = [sunMesh, ...bodies.map(b => b.mesh), beltAnchor, cometNucleus];
 const tourBodies = [SUN, ...bodies.map(b => b.data), ASTEROIDS, COMET];
 
-btnTour.onclick = () => { tour ? endTour() : startTour(); };
+btnTour.onclick = () => { if (paradeMode) return; tour ? endTour() : startTour(); };
 
 function startTour() {
   tour = { i: -1, timer: 0 };
@@ -553,10 +586,11 @@ function closeEvents() { eventsMenu.classList.add('hidden'); }
 btnEvents.onclick = () => eventsMenu.classList.contains('hidden') ? openEvents() : closeEvents();
 
 function enterDemo(ph) {
-  inDemo = true;
   currentPhenomenon = ph;
   endTour();
   hideCard();
+  if (ph.id === 'parade') { enterParade(ph); return; }
+  inDemo = true;
   systemGroup.visible = false;
   labelsRoot.classList.add('hidden');
   topbar.classList.add('hidden');
@@ -579,7 +613,41 @@ function exitDemo() {
   goHome();
 }
 
-document.getElementById('demo-back').onclick = exitDemo;
+// ------------------------------------------------------------
+//  Парад планет — все планеты выстраиваются в линию от Солнца
+//  (показываем прямо в основной системе, без отдельной сценки).
+// ------------------------------------------------------------
+let paradeMode = false;
+let paradeAnnounced = false;
+
+function enterParade(ph) {
+  paradeMode = true;
+  paradeAnnounced = false;
+  topbar.classList.add('hidden');
+  planetBar.classList.add('hidden');
+  demoTitle.textContent = ph.name;
+  demoPhase.textContent = 'Планеты собираются в одну сторону…';
+  demoBar.classList.remove('hidden');
+  speech.say(ph.intro);
+  const farthest = PLANETS[PLANETS.length - 1].distance;
+  flight = {
+    fromCam: camera.position.clone(),
+    toCam: new THREE.Vector3(farthest * 0.55, farthest * 0.45, farthest * 0.95),
+    fromTarget: controls.target.clone(),
+    toTarget: new THREE.Vector3(farthest * 0.4, 0, 0),
+    follow: null, t: 0,
+  };
+}
+
+function exitParade() {
+  paradeMode = false;
+  topbar.classList.remove('hidden');
+  planetBar.classList.remove('hidden');
+  demoBar.classList.add('hidden');
+  goHome();
+}
+
+document.getElementById('demo-back').onclick = () => { paradeMode ? exitParade() : exitDemo(); };
 document.getElementById('demo-say').onclick = () => { if (currentPhenomenon) speech.say(currentPhenomenon.intro); };
 
 // ============================================================
@@ -598,12 +666,33 @@ function animate() {
     return;
   }
 
-  if (running) {
+  if (paradeMode) {
+    // Плавно подводим каждую планету к углу 0 (кратчайшим путём) — так
+    // все они выстраиваются в одну линию от Солнца, как в настоящем
+    // параде планет.
+    let allAligned = true;
+    for (const b of bodies) {
+      let diff = Math.atan2(Math.sin(-b.angle), Math.cos(-b.angle));
+      if (Math.abs(diff) > 0.02) allAligned = false;
+      b.angle += diff * Math.min(1, dt * 1.6);
+      b.orbit.rotation.y = b.angle;
+      b.mesh.rotation.y += b.data.spinSpeed * dt * 0.5;
+      if (b.moonPivot) b.moonPivot.rotation.y += b.moonData.speed * dt * 0.5;
+      if (b.clouds) b.clouds.rotation.y += dt * 0.04;
+    }
+    sunMesh.rotation.y += dt * 0.05;
+    if (allAligned && !paradeAnnounced) {
+      paradeAnnounced = true;
+      demoPhase.textContent = 'Вот это парад планет! 🎉 Все выстроились в ряд.';
+      speech.say(PHENOMENA.find(p => p.id === 'parade').afterFact);
+    }
+  } else if (running) {
     for (const b of bodies) {
       b.angle += b.data.orbitSpeed * speed * dt * 0.5;
       b.orbit.rotation.y = b.angle;
       b.mesh.rotation.y += b.data.spinSpeed * dt * (0.4 + speed);
       if (b.moonPivot) b.moonPivot.rotation.y += b.moonData.speed * dt * (0.4 + speed);
+      if (b.clouds) b.clouds.rotation.y += dt * 0.05 * (0.4 + speed);
     }
     sunMesh.rotation.y += dt * 0.05;
     beltGroup.rotation.y += dt * speed * 0.06;
@@ -619,7 +708,7 @@ function animate() {
     camera.position.lerpVectors(flight.fromCam, flight.toCam, e);
     controls.target.lerpVectors(flight.fromTarget, flight.toTarget, e);
     if (flight.t >= 1) flight = null;
-  } else if (currentTarget && currentBody && currentBody.id !== 'sun' && currentBody.id !== 'belt') {
+  } else if (!paradeMode && currentTarget && currentBody && currentBody.id !== 'sun' && currentBody.id !== 'belt') {
     const wp = new THREE.Vector3();
     currentTarget.getWorldPosition(wp);
     controls.target.lerp(wp, 0.08);

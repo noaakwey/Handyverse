@@ -60,13 +60,15 @@ const builders = {
   rocky(ctx, w, h) {
     fillBase(ctx, w, h, '#8d847a');
     speckle(ctx, w, h, 1400, ['#b3a9a0', '#6f675f', '#a59c92'], 2, 10, 0.5);
-    // кратеры
-    for (let i = 0; i < 90; i++) {
-      const x = Math.random() * w, y = Math.random() * h, r = 4 + Math.random() * 18;
+    // кратеры (побольше — Меркурий весь в них)
+    for (let i = 0; i < 150; i++) {
+      const x = Math.random() * w, y = Math.random() * h, r = 3 + Math.random() * Math.random() * 22;
       ctx.beginPath(); ctx.fillStyle = '#5f5851'; ctx.globalAlpha = 0.5;
       ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.fillStyle = '#aaa094'; ctx.globalAlpha = 0.4;
       ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.strokeStyle = 'rgba(225,220,210,0.3)'; ctx.lineWidth = Math.max(1, r * 0.1);
+      ctx.arc(x - r * 0.15, y - r * 0.15, r * 0.95, Math.PI * 0.7, Math.PI * 1.8); ctx.stroke();
     }
     ctx.globalAlpha = 1;
   },
@@ -103,19 +105,65 @@ const builders = {
       }
       ctx.closePath(); ctx.fill();
     }
+    // горные хребты и пустыни — лёгкая текстура поверх материков
+    speckle(ctx, w, h, 500, ['#1a6e2e', '#5c8f3a', '#caa86a'], 3, 9, 0.18);
     // полярные шапки
     ctx.globalAlpha = 0.85; ctx.fillStyle = '#eef6ff';
     ctx.fillRect(0, 0, w, h * 0.05);
     ctx.fillRect(0, h * 0.95, w, h * 0.05);
-    // облака
     ctx.globalAlpha = 1;
-    speckle(ctx, w, h, 380, ['#ffffff', '#eaf2ff'], 8, 30, 0.32);
+  },
+
+  // Облака Земли — отдельный прозрачный слой (накладывается своей сферой).
+  // Держим блики подальше от полюсов: у сферы текстура стягивается в точку
+  // на полюсах, и крупные мягкие пятна там превращаются в некрасивый веер.
+  clouds(ctx, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    for (let i = 0; i < 90; i++) {
+      const cx = Math.random() * w, cy = h * (0.18 + Math.random() * 0.64);
+      const rx = 22 + Math.random() * 70, ry = rx * (0.4 + Math.random() * 0.3);
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
+      grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+      grad.addColorStop(0.6, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Лёгкая дымка у полюсов: важно, чтобы яркость зависела только от
+    // широты (Y), а не от X — иначе на самом полюсе (где сходится вся
+    // строка текстуры в одну точку сферы) появится шов-«веер».
+    const bandH = h * 0.16;
+    const top = ctx.createLinearGradient(0, 0, 0, bandH);
+    top.addColorStop(0, 'rgba(255,255,255,0.25)');
+    top.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = top;
+    ctx.fillRect(0, 0, w, bandH);
+    const bottom = ctx.createLinearGradient(0, h - bandH, 0, h);
+    bottom.addColorStop(0, 'rgba(255,255,255,0)');
+    bottom.addColorStop(1, 'rgba(255,255,255,0.25)');
+    ctx.fillStyle = bottom;
+    ctx.fillRect(0, h - bandH, w, bandH);
   },
 
   // Рыжая пыль и тёмные пятна (Марс).
   mars(ctx, w, h) {
     fillBase(ctx, w, h, '#c4633a');
-    speckle(ctx, w, h, 1600, ['#d97b4a', '#a84a28', '#e08a52', '#8f3d22'], 3, 14, 0.45);
+    speckle(ctx, w, h, 1900, ['#d97b4a', '#a84a28', '#e08a52', '#8f3d22'], 3, 14, 0.45);
+    // кратеры и каньоны (намёк на Долину Маринера)
+    for (let i = 0; i < 70; i++) {
+      const x = Math.random() * w, y = Math.random() * h, r = 3 + Math.random() * 12;
+      ctx.beginPath(); ctx.fillStyle = '#7a2f17'; ctx.globalAlpha = 0.4;
+      ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 0.35; ctx.strokeStyle = '#7a2f17'; ctx.lineWidth = 6;
+    ctx.beginPath();
+    const cy = h * 0.55;
+    ctx.moveTo(w * 0.35, cy);
+    for (let x = w * 0.35; x < w * 0.62; x += 10) ctx.lineTo(x, cy + Math.sin(x * 0.2) * 5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     // полярные шапки
     ctx.globalAlpha = 0.8; ctx.fillStyle = '#f3ece4';
     ctx.beginPath(); ctx.ellipse(w / 2, 0, w * 0.16, h * 0.05, 0, 0, Math.PI * 2); ctx.fill();
@@ -137,6 +185,16 @@ const builders = {
     ctx.beginPath();
     ctx.ellipse(w * 0.7, h * 0.62, w * 0.045, h * 0.032, 0, 0, Math.PI * 2);
     ctx.fill();
+    // Несколько меньших штормов-овалов по другим полосам.
+    const storms = [
+      [0.22, 0.40, '#f0e2c0'], [0.45, 0.74, '#e8d2a0'], [0.85, 0.28, '#f3e6c8'],
+    ];
+    for (const [sx, sy, col] of storms) {
+      ctx.fillStyle = col; ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      ctx.ellipse(w * sx, h * sy, w * 0.022, h * 0.016, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
   },
 
@@ -239,10 +297,25 @@ const builders = {
     speckle(ctx, w, h, 120, ['#cfe0ff', '#aebfe0'], 4, 14, 0.4);
   },
 
-  // Бурлящая поверхность Солнца.
+  // Бурлящая поверхность Солнца с гранулами и яркими протуберанцами.
   sun(ctx, w, h) {
     fillBase(ctx, w, h, '#ffb733');
-    speckle(ctx, w, h, 2200, ['#ffd95b', '#ff8c1a', '#ffe98a', '#ff6f00'], 4, 18, 0.5);
+    speckle(ctx, w, h, 3200, ['#ffd95b', '#ff8c1a', '#ffe98a', '#ff6f00'], 3, 14, 0.5);
+    // крупные клубящиеся «гранулы»
+    speckle(ctx, w, h, 90, ['#ffe98a', '#ff9d2e'], 16, 42, 0.22);
+    // яркие вспышки-протуберанцы
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * w, y = Math.random() * h;
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = '#fff3b0';
+      ctx.lineWidth = 2 + Math.random() * 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 18, y - 14, x + 34 + Math.random() * 20, y + Math.random() * 10 - 5);
+      ctx.stroke();
+      ctx.restore();
+    }
   },
 };
 
@@ -326,7 +399,9 @@ export function makeRingTexture() {
   for (let r = size / 2; r > size * 0.28; r -= 1) {
     const t = (r - size * 0.28) / (size * 0.22);
     const band = 0.35 + 0.65 * Math.abs(Math.sin(r * 0.35));
-    const a = (0.15 + band * 0.5) * (0.6 + 0.4 * t);
+    // Тёмный разрыв (щель Кассини) — заметная пустая полоса в кольце.
+    const cassini = (t > 0.56 && t < 0.61) ? 0.12 : 1;
+    const a = (0.15 + band * 0.5) * (0.6 + 0.4 * t) * cassini;
     ctx.beginPath();
     ctx.strokeStyle = `rgba(225, 205, 150, ${a})`;
     ctx.lineWidth = 1.5;
