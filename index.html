@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🚀 Солнечная система для малышей</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪐</text></svg>" />
+  <meta name="description" content="Интерактивное 3D-путешествие по Солнечной системе для детей. Планеты, Солнце и весёлые факты на русском языке." />
+  <link rel="stylesheet" href="css/styles.css" />
+
+  <!-- Three.js подключается локально (папка vendor) — интернет не нужен -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Экран загрузки -->
+  <div id="loader">
+    <div class="rocket">🚀</div>
+    <div class="loader-text">Готовим ракету…</div>
+  </div>
+
+  <!-- 3D-сцена -->
+  <canvas id="scene"></canvas>
+
+  <!-- Подписи к планетам (рисуются поверх 3D) -->
+  <div id="labels"></div>
+
+  <!-- Верхняя панель управления -->
+  <header id="topbar">
+    <button id="btn-home" class="ctrl-btn" title="Показать всю систему" aria-label="Вся система">
+      <span class="ico">🏠</span><span class="lbl">Вся система</span>
+    </button>
+    <button id="btn-play" class="ctrl-btn" title="Пауза / Движение" aria-label="Пауза или движение">
+      <span class="ico">⏸️</span><span class="lbl">Пауза</span>
+    </button>
+    <button id="btn-tour" class="ctrl-btn" title="Путешествие по планетам" aria-label="Путешествие">
+      <span class="ico">🎬</span><span class="lbl">Путешествие</span>
+    </button>
+    <button id="btn-sound" class="ctrl-btn" title="Звук" aria-label="Звук">
+      <span class="ico">🔊</span><span class="lbl">Звук</span>
+    </button>
+
+    <div class="speed-box">
+      <span class="ico">🐢</span>
+      <input id="speed" type="range" min="0" max="100" value="45" aria-label="Скорость планет" />
+      <span class="ico">🐇</span>
+    </div>
+  </header>
+
+  <!-- Карточка с фактом о планете -->
+  <section id="card" class="hidden" aria-live="polite">
+    <button id="card-close" aria-label="Закрыть">✕</button>
+    <div id="card-emoji">🪐</div>
+    <h2 id="card-title">Планета</h2>
+    <p id="card-fact">Факт</p>
+    <div id="card-stats"></div>
+    <button id="card-say" class="say-btn">🔊 Рассказать ещё раз</button>
+  </section>
+
+  <!-- Нижнее меню планет -->
+  <nav id="planet-bar" aria-label="Выбор планеты"></nav>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
