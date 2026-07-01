@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SUN, PLANETS, ASTEROIDS, COMET, PHENOMENA, WELCOME } from './data.js';
+import { SUN, PLANETS, ASTEROIDS, COMET, PHENOMENA, WELCOME, MISSION_STEPS, QUIZ_BANK, ACTION_BANK } from './data.js';
 import { makeTexture, makeRingTexture, makeGlowTexture, makeTailTexture, makeEarthMaps } from './textures.js';
 import { createDemos } from './demos.js';
 
@@ -424,8 +424,38 @@ const cardEmoji = document.getElementById('card-emoji');
 const cardTitle = document.getElementById('card-title');
 const cardFact = document.getElementById('card-fact');
 const cardStats = document.getElementById('card-stats');
+const cardAction = document.getElementById('card-action');
+const quizBox = document.getElementById('quiz-box');
 let currentBody = null;
 let currentTarget = null;
+let stars = Number(localStorage.getItem('erik-space-stars') || 0);
+let activeMission = null;
+const solvedQuizzes = new Set(JSON.parse(localStorage.getItem('erik-space-solved') || '[]'));
+const missionPanel = document.getElementById('mission-panel');
+const missionText = document.getElementById('mission-text');
+const starScore = document.getElementById('star-score');
+const toast = document.getElementById('toast');
+
+const QUIZ_OPTION_EMOJI = {
+  'Солнце': '☀️', 'Комета': '☄️', 'Астероид': '🪨', 'Меркурий': '⚪', 'Земля': '🌍', 'Нептун': '🔵',
+  'Жёлтые облака': '☁️', 'Кольца': '🪐', 'Снег': '❄️', 'Луна': '🌙', 'Роботы': '🤖', 'Дельфины': '🐬',
+  'Поезда': '🚂', 'Юпитер': '🟤', 'Марс': '🔴', 'Хвостом': '☄️', 'Океанами': '🌊', 'На боку': '🙃',
+  'Прыжками': '🦘', 'Задом наперёд': '↩️', 'Венера': '🟡', 'Камни': '🪨', 'Рыбы': '🐟', 'Облака': '☁️',
+  'От Солнца': '👉☀️', 'К Солнцу': '☀️👈', 'Вниз': '⬇️'
+};
+
+function makeToddlerPrompt(text) {
+  return `Слушай и играй: ${text}`;
+}
+function updateStars() { starScore.textContent = `⭐ ${stars}`; localStorage.setItem('erik-space-stars', String(stars)); }
+function reward(text, amount = 1) {
+  stars += amount; updateStars();
+  toast.textContent = text; toast.classList.remove('hidden');
+  clearTimeout(reward._t); reward._t = setTimeout(() => toast.classList.add('hidden'), 1250);
+  speech.say(text.replace(/⭐|🎉/g, ''));
+}
+function saveSolved() { localStorage.setItem('erik-space-solved', JSON.stringify([...solvedQuizzes])); }
+updateStars();
 
 function showCard(body) {
   currentBody = body;
@@ -440,9 +470,49 @@ function showCard(body) {
     d.innerHTML = `${s.label}<b>${s.value}</b>`;
     cardStats.appendChild(d);
   }
+  const action = ACTION_BANK[body.id];
+  cardAction.textContent = action ? `🎮 Повтори движение: ${action}` : '';
+  cardAction.classList.toggle('hidden', !action);
+  renderQuiz(body);
+  checkMission(body);
   card.classList.remove('hidden');
-  speech.say(body.fact);
+  speech.say(`${body.name}. ${body.fact} ${action ? 'А теперь игра: ' + action : ''}`);
   setActiveChip(body.id);
+}
+function renderQuiz(body) {
+  const quiz = QUIZ_BANK[body.id];
+  quizBox.innerHTML = '';
+  if (!quiz) return;
+  const done = solvedQuizzes.has(body.id);
+  const title = document.createElement('div');
+  title.className = 'quiz-title';
+  title.textContent = done ? '✅ Ура! Уже получилось!' : `🔊 ${quiz.question}`;
+  quizBox.appendChild(title);
+  if (done) return;
+  const opts = document.createElement('div');
+  opts.className = 'quiz-options';
+  for (const option of quiz.options) {
+    const btn = document.createElement('button');
+    btn.className = 'quiz-option';
+    btn.innerHTML = `<span class="quiz-emoji">${QUIZ_OPTION_EMOJI[option] || '✨'}</span><span>${option}</span>`;
+    btn.setAttribute('aria-label', option);
+    btn.onclick = () => {
+      const ok = option === quiz.answer;
+      btn.classList.add(ok ? 'good' : 'bad');
+      if (!ok) { speech.say('Почти! Попробуй ещё раз. Нажми другую картинку.'); return; }
+      solvedQuizzes.add(body.id); saveSolved(); reward('Верно! +1 ⭐');
+      renderQuiz(body);
+    };
+    opts.appendChild(btn);
+  }
+  quizBox.appendChild(opts);
+  speech.say(makeToddlerPrompt(quiz.question));
+}
+function checkMission(body) {
+  if (!activeMission || activeMission.bodyId !== body.id) return;
+  activeMission = null;
+  missionText.textContent = 'Ура! Получилось! Жми «Новая миссия». ';
+  reward('Миссия выполнена! +2 ⭐', 2);
 }
 function hideCard() {
   card.classList.add('hidden');
@@ -452,7 +522,7 @@ function hideCard() {
 }
 
 document.getElementById('card-close').onclick = () => { hideCard(); endTour(); };
-document.getElementById('card-say').onclick = () => { if (currentBody) speech.say(currentBody.fact); };
+document.getElementById('card-say').onclick = () => { if (currentBody) speech.say(`${currentBody.name}. ${currentBody.fact}`); };
 
 // ============================================================
 //  Полёт камеры к объекту
@@ -549,6 +619,7 @@ const btnHome = document.getElementById('btn-home');
 const btnPlay = document.getElementById('btn-play');
 const btnTour = document.getElementById('btn-tour');
 const btnSound = document.getElementById('btn-sound');
+const btnMission = document.getElementById('btn-mission');
 const speedSlider = document.getElementById('speed');
 
 btnHome.onclick = () => { endTour(); hideCard(); goHome(); };
@@ -559,6 +630,18 @@ btnPlay.onclick = () => {
   btnPlay.querySelector('.lbl').textContent = running ? 'Пауза' : 'Пуск';
   btnPlay.classList.toggle('off', !running);
 };
+
+btnMission.onclick = () => {
+  missionPanel.classList.toggle('hidden');
+  if (!activeMission) newMission();
+};
+document.getElementById('mission-next').onclick = () => newMission();
+function newMission() {
+  activeMission = MISSION_STEPS[(Math.random() * MISSION_STEPS.length) | 0];
+  missionText.textContent = activeMission.text;
+  missionPanel.classList.remove('hidden');
+  speech.say(`Новая миссия. ${activeMission.text}`);
+}
 
 btnSound.onclick = () => {
   speech.on = !speech.on;
