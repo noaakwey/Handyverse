@@ -60,9 +60,10 @@ const builders = {
   rocky(ctx, w, h) {
     fillBase(ctx, w, h, '#8d847a');
     speckle(ctx, w, h, 1400, ['#b3a9a0', '#6f675f', '#a59c92'], 2, 10, 0.5);
-    // кратеры (побольше — Меркурий весь в них)
-    for (let i = 0; i < 150; i++) {
-      const x = Math.random() * w, y = Math.random() * h, r = 3 + Math.random() * Math.random() * 22;
+    // кратеры (побольше — Меркурий весь в них). Держим их подальше от
+    // полюсов сферы — иначе крупные кратеры превращаются в «веер».
+    for (let i = 0; i < 190; i++) {
+      const x = Math.random() * w, y = h * (0.06 + Math.random() * 0.88), r = 3 + Math.random() * Math.random() * 22;
       ctx.beginPath(); ctx.fillStyle = '#5f5851'; ctx.globalAlpha = 0.5;
       ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.fillStyle = '#aaa094'; ctx.globalAlpha = 0.4;
@@ -73,11 +74,25 @@ const builders = {
     ctx.globalAlpha = 1;
   },
 
-  // Густые жёлто-кремовые облака (Венера).
+  // Густые жёлто-кремовые облака (Венера) — с завихрениями, как на
+  // настоящих снимках в ультрафиолете.
   venus(ctx, w, h) {
     fillBase(ctx, w, h, '#d9b25e');
     bands(ctx, w, h, ['#e7c878', '#cf9f4d', '#dec073', '#c79a47'], 14);
     speckle(ctx, w, h, 700, ['#f0d588', '#c08f3e'], 6, 26, 0.25);
+    // завихрения-«запятые» на подветренной стороне
+    for (let i = 0; i < 10; i++) {
+      const cx = Math.random() * w, cy = h * (0.15 + Math.random() * 0.7);
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = '#8a6a30';
+      ctx.lineWidth = 3 + Math.random() * 3;
+      ctx.beginPath();
+      const r = 30 + Math.random() * 60;
+      ctx.arc(cx, cy, r, Math.random() * Math.PI, Math.random() * Math.PI + Math.PI * 1.1);
+      ctx.stroke();
+      ctx.restore();
+    }
   },
 
   // Океаны, материки и облака (Земля).
@@ -151,9 +166,9 @@ const builders = {
   mars(ctx, w, h) {
     fillBase(ctx, w, h, '#c4633a');
     speckle(ctx, w, h, 1900, ['#d97b4a', '#a84a28', '#e08a52', '#8f3d22'], 3, 14, 0.45);
-    // кратеры и каньоны (намёк на Долину Маринера)
+    // кратеры и каньоны (намёк на Долину Маринера) — подальше от полюсов
     for (let i = 0; i < 70; i++) {
-      const x = Math.random() * w, y = Math.random() * h, r = 3 + Math.random() * 12;
+      const x = Math.random() * w, y = h * (0.08 + Math.random() * 0.84), r = 3 + Math.random() * 12;
       ctx.beginPath(); ctx.fillStyle = '#7a2f17'; ctx.globalAlpha = 0.4;
       ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     }
@@ -202,13 +217,37 @@ const builders = {
   saturn(ctx, w, h) {
     fillBase(ctx, w, h, '#e0c890');
     bands(ctx, w, h, ['#ecd9a4', '#d4b876', '#e6cd8f', '#c9a967'], 10);
+    // едва заметные бледные завихрения — Сатурн спокойнее Юпитера
+    ctx.globalAlpha = 0.18;
+    for (let i = 0; i < 5; i++) {
+      ctx.fillStyle = '#f5e9c4';
+      ctx.beginPath();
+      ctx.ellipse(Math.random() * w, h * (0.2 + Math.random() * 0.6), w * 0.02, h * 0.012, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   },
 
   // Гладкая ледяная планета (Уран, Нептун) — цвет задаётся снаружи.
-  ice(ctx, w, h, color) {
+  // variant='neptune' добавляет фирменное Большое Тёмное пятно.
+  ice(ctx, w, h, color, variant) {
     fillBase(ctx, w, h, color || '#7fc8e8');
     bands(ctx, w, h, [shade(color, 14), shade(color, -10), color], 6);
     speckle(ctx, w, h, 200, [shade(color, 18)], 10, 40, 0.18);
+    if (variant === 'neptune') {
+      // Большое Тёмное пятно — гигантский тёмный ураган
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = shade(color, -55);
+      ctx.beginPath();
+      ctx.ellipse(w * 0.62, h * 0.46, w * 0.05, h * 0.038, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(w * 0.6, h * 0.53, w * 0.018, h * 0.012, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   },
 
   // Подробная Луна: тёмные «моря», множество кратеров с подсвеченными
@@ -332,16 +371,16 @@ function shade(hex, amt) {
 const cache = new Map();
 
 // Для самых заметных тел рисуем текстуру крупнее — больше мелких деталей.
-const HIRES = new Set(['moon', 'earth', 'jupiter']);
+const HIRES = new Set(['moon', 'earth', 'jupiter', 'rocky', 'venus', 'mars', 'saturn']);
 
-export function makeTexture(type, color) {
-  const key = type + (color || '');
+export function makeTexture(type, color, variant) {
+  const key = type + (color || '') + (variant || '');
   if (cache.has(key)) return cache.get(key);
   const w = HIRES.has(type) ? 2048 : 1024;
   const h = w / 2;
   const canvas = makeCanvas(w, h);
   const ctx = canvas.getContext('2d');
-  (builders[type] || builders.rocky)(ctx, w, h, color);
+  (builders[type] || builders.rocky)(ctx, w, h, color, variant);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;

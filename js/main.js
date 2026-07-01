@@ -116,6 +116,12 @@ for (const p of PLANETS) {
   const orbit = new THREE.Group();
   systemGroup.add(orbit);
 
+  // Кратерные каменистые тела (Меркурий, Марс) получают рельеф от своей
+  // же текстуры — у них правда есть твёрдая поверхность с горами и
+  // кратерами. У газовых/облачных планет твёрдого рельефа нет, поэтому
+  // им бугристость не рисуем — это и физически точнее, и красивее.
+  const ROCKY_BUMP = new Set(['rocky', 'mars']);
+
   let mat;
   if (p.id === 'earth') {
     // Земля: отдельная пара карт (цвет + шероховатость) — океан гладкий
@@ -126,10 +132,11 @@ for (const p of PLANETS) {
     });
   } else {
     const texType = p.texture === 'ice' ? 'ice' : p.texture;
-    const tex = makeTexture(texType, p.color);
-    mat = new THREE.MeshStandardMaterial({
-      map: tex, bumpMap: tex, bumpScale: 0.015, roughness: 1, metalness: 0,
-    });
+    const variant = p.texture === 'ice' ? p.id : undefined; // 'neptune' → тёмное пятно
+    const tex = makeTexture(texType, p.color, variant);
+    const opts = { map: tex, roughness: 1, metalness: 0 };
+    if (ROCKY_BUMP.has(texType)) { opts.bumpMap = tex; opts.bumpScale = 0.015; }
+    mat = new THREE.MeshStandardMaterial(opts);
   }
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(p.radius, 48, 48), mat);
   mesh.position.x = p.distance;
@@ -175,6 +182,22 @@ for (const p of PLANETS) {
     }));
     atmosphere.scale.setScalar(p.radius * 3.1);
     mesh.add(atmosphere);
+  }
+
+  // Дымка атмосферы для остальных планет с настоящей атмосферой —
+  // у Меркурия и Луны воздуха нет, поэтому им сияние не рисуем.
+  const ATMO_COLOR = {
+    venus: '#f0d98a', mars: '#e0906a', jupiter: '#e8d4a8',
+    saturn: '#e8d8ab', uranus: '#9fe3e0', neptune: '#7f9fe8',
+  };
+  if (ATMO_COLOR[p.id]) {
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeGlowTexture(ATMO_COLOR[p.id]), transparent: true,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+      opacity: p.id === 'venus' ? 0.6 : p.id === 'mars' ? 0.3 : 0.45,
+    }));
+    glow.scale.setScalar(p.radius * (p.id === 'mars' ? 2.6 : 3.1));
+    mesh.add(glow);
   }
 
   // Луна (Земля) — подробная, с рельефом
