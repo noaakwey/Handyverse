@@ -611,6 +611,7 @@ const demoTitle = document.getElementById('demo-title');
 const demoPhase = document.getElementById('demo-phase');
 const btnEvents = document.getElementById('btn-events');
 const topbar = document.getElementById('topbar');
+const dedication = document.getElementById('dedication');
 let inDemo = false;
 let currentPhenomenon = null;
 
@@ -623,9 +624,22 @@ for (const ph of PHENOMENA) {
   eventsMenu.appendChild(b);
 }
 
-function openEvents() { eventsMenu.classList.remove('hidden'); }
+function positionTopbarDependents() {
+  // Верхняя панель может перенестись на 2-3 строки на узком экране —
+  // подстраиваем всё, что стоит под ней, чтобы никогда не перекрывалось.
+  const bottom = topbar.getBoundingClientRect().bottom;
+  if (!eventsMenu.classList.contains('hidden')) eventsMenu.style.top = (bottom + 10) + 'px';
+  dedication.style.top = (bottom + 10) + 'px';
+}
+
+function openEvents() {
+  eventsMenu.style.top = (topbar.getBoundingClientRect().bottom + 10) + 'px';
+  eventsMenu.classList.remove('hidden');
+}
 function closeEvents() { eventsMenu.classList.add('hidden'); }
 btnEvents.onclick = () => eventsMenu.classList.contains('hidden') ? openEvents() : closeEvents();
+window.addEventListener('resize', positionTopbarDependents);
+positionTopbarDependents();
 
 function enterDemo(ph) {
   currentPhenomenon = ph;
