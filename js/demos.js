@@ -279,11 +279,12 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
     },
   };
 
-  // Названия фаз Луны по углу на орбите.
+  // Названия фаз Луны по углу на орбите — простыми словами, без
+  // астрономических терминов вроде «четверть».
   const PHASE_NAMES = [
-    'Полнолуние 🌕', 'Убывающая Луна 🌖', 'Последняя четверть 🌗',
-    'Старый месяц 🌘', 'Новолуние 🌑', 'Молодой месяц 🌒',
-    'Первая четверть 🌓', 'Растущая Луна 🌔',
+    'Полная Луна 🌕', 'Луна худеет 🌖', 'Половинка Луны 🌗',
+    'Тонкий месяц 🌘', 'Луны не видно 🌑', 'Появился месяц 🌒',
+    'Половинка Луны 🌓', 'Луна почти круглая 🌔',
   ];
 
   function start(id) {
@@ -364,8 +365,8 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
         umbra.material.opacity = 0.3 + fade * 0.6;
         umbra.scale.setScalar(0.6 + fade * 0.5);
       }
-      label = hits ? 'Тень Луны падает на Землю — затмение! 🌑'
-                   : 'Луна подлетает к линии Солнца…';
+      label = hits ? 'Тень Луны накрыла Землю! 🌑'
+                   : 'Луна летит к Солнцу…';
     }
 
     else if (state.id === 'lunar') {
@@ -380,8 +381,8 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
       // в тени Луна краснеет и темнеет
       const red = inShadow ? 1 - Math.abs(z) / 2.2 : 0;
       moonMat.color.setRGB(1 - red * 0.1, 1 - red * 0.65, 1 - red * 0.75);
-      label = inShadow ? 'Луна в тени Земли — она краснеет! 🔴'
-                       : 'Луна подлетает к тени Земли…';
+      label = inShadow ? 'Луна в тени Земли. Она краснеет! 🔴'
+                       : 'Луна летит к тени Земли…';
     }
 
     else if (state.id === 'daynight') {
@@ -408,9 +409,9 @@ export function createDemos({ scene, camera, controls, lights, speak }) {
       _dir.set(-Math.sin(SEASON_TILT), Math.cos(SEASON_TILT), 0);
       _normal.subVectors(sunPos, earth.position).normalize();
       const tilt = _dir.dot(_normal);
-      if (tilt > 0.18) label = 'Лето на севере ☀️ — зима на юге ❄️';
-      else if (tilt < -0.18) label = 'Зима на севере ❄️ — лето на юге ☀️';
-      else label = 'Весна или осень 🌸 — везде похожая погода';
+      if (tilt > 0.18) label = 'Тут лето ☀️, а там зима ❄️';
+      else if (tilt < -0.18) label = 'Тут зима ❄️, а там лето ☀️';
+      else label = 'Весна или осень 🌸';
     }
 
     // подписи всегда чуть выше тел

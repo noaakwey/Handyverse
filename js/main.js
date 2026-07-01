@@ -682,7 +682,7 @@ function enterParade(ph) {
   topbar.classList.add('hidden');
   planetBar.classList.add('hidden');
   demoTitle.textContent = ph.name;
-  demoPhase.textContent = 'Планеты собираются в одну сторону…';
+  demoPhase.textContent = 'Планеты встают в ряд…';
   demoBar.classList.remove('hidden');
   speech.say(ph.intro);
   const farthest = PLANETS[PLANETS.length - 1].distance;
@@ -739,7 +739,7 @@ function animate() {
     sunMesh.rotation.y += dt * 0.05;
     if (allAligned && !paradeAnnounced) {
       paradeAnnounced = true;
-      demoPhase.textContent = 'Вот это парад планет! 🎉 Все выстроились в ряд.';
+      demoPhase.textContent = 'Вот и парад планет! 🎉';
       speech.say(PHENOMENA.find(p => p.id === 'parade').afterFact);
     }
   } else if (running) {
