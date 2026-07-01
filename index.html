@@ -45,6 +45,9 @@
     <button id="btn-events" class="ctrl-btn" title="Космические явления" aria-label="Явления">
       <span class="ico">🌗</span><span class="lbl">Явления</span>
     </button>
+    <button id="btn-mission" class="ctrl-btn" title="Миссия для Эрика" aria-label="Миссия">
+      <span class="ico">⭐</span><span class="lbl">Миссия</span>
+    </button>
     <button id="btn-sound" class="ctrl-btn" title="Звук" aria-label="Звук">
       <span class="ico">🔊</span><span class="lbl">Звук</span>
     </button>
@@ -56,13 +59,34 @@
     </div>
   </header>
 
-  <!-- Карточка с фактом о планете -->
+  <aside id="mission-panel" class="hidden" aria-live="polite">
+    <div class="mission-head">
+      <span>⭐ Миссия Эрика</span>
+      <b id="star-score">0</b>
+    </div>
+    <div id="mission-card" class="mission-card" aria-hidden="true">
+      <span id="mission-emoji">🚀</span>
+      <b id="mission-name">Космос</b>
+    </div>
+    <p id="mission-text">Выбери миссию и собери звёзды!</p>
+    <div class="mission-actions">
+      <button id="mission-repeat" class="say-btn small">🔊 Повторить</button>
+      <button id="mission-show" class="say-btn small">🚀 Показать</button>
+      <button id="mission-next" class="say-btn small">🎲 Новая</button>
+    </div>
+  </aside>
+
+  <div id="toast" class="hidden" aria-live="polite"></div>
+
+  <!-- Карточка-подсказка: для 4-летнего ребёнка главное звук, жесты и крупные кнопки -->
   <section id="card" class="hidden" aria-live="polite">
     <button id="card-close" aria-label="Закрыть">✕</button>
     <div id="card-emoji">🪐</div>
     <h2 id="card-title">Планета</h2>
-    <p id="card-fact">Факт</p>
+    <p id="card-fact">Нажми 🔊 и слушай подсказку</p>
     <div id="card-stats"></div>
+    <div id="card-action" class="card-action"></div>
+    <div id="quiz-box" class="quiz-box"></div>
     <button id="card-say" class="say-btn">🔊 Рассказать ещё раз</button>
   </section>
 
