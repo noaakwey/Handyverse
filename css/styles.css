@@ -552,6 +552,7 @@ body::before {
     linear-gradient(135deg, var(--card-color, var(--accent)), var(--accent-2), #ff7bd5) border-box;
   border: 4px solid transparent;
   box-shadow: 0 22px 70px rgba(0,0,0,0.55), 0 0 42px rgba(255, 211, 77, 0.30);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.55), 0 0 42px color-mix(in srgb, var(--card-color, var(--accent)) 45%, transparent);
 }
 
 #card::before {
@@ -572,6 +573,7 @@ body::before {
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.28), rgba(255,255,255,0.08));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 30px rgba(106, 209, 255, 0.30);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 30px color-mix(in srgb, var(--card-color, var(--accent)) 42%, transparent);
   animation: happy-float 2.6s ease-in-out infinite;
 }
 
@@ -584,6 +586,7 @@ body::before {
 
 .say-btn {
   box-shadow: 0 12px 28px rgba(255, 211, 77, 0.28), inset 0 1px 0 rgba(255,255,255,0.35);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--card-color, var(--accent)) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.35);
 }
 
 #mission-panel {

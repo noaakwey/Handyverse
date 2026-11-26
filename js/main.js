@@ -440,6 +440,7 @@ function loadSolvedQuizzes() {
   }
 }
 const solvedQuizzes = new Set(loadSolvedQuizzes());
+const solvedQuizzes = new Set(JSON.parse(localStorage.getItem('erik-space-solved') || '[]'));
 const missionPanel = document.getElementById('mission-panel');
 const missionText = document.getElementById('mission-text');
 const starScore = document.getElementById('star-score');
@@ -526,6 +527,7 @@ function checkMission(body) {
   missionName.textContent = 'Победа!';
   missionText.textContent = 'Ура! Получилось! Жми «Новая». ';
   missionPanel.classList.remove('hidden');
+  missionText.textContent = 'Ура! Получилось! Жми «Новая миссия». ';
   reward('Миссия выполнена! +2 ⭐', 2);
 }
 function hideCard() {
@@ -683,6 +685,16 @@ function showMissionTarget() {
   endTour();
   selectBody(target.target, target.body);
   missionPanel.classList.remove('hidden');
+}
+  missionPanel.classList.toggle('hidden');
+  if (!activeMission) newMission();
+};
+document.getElementById('mission-next').onclick = () => newMission();
+function newMission() {
+  activeMission = MISSION_STEPS[(Math.random() * MISSION_STEPS.length) | 0];
+  missionText.textContent = activeMission.text;
+  missionPanel.classList.remove('hidden');
+  speech.say(`Новая миссия. ${activeMission.text}`);
 }
 
 btnSound.onclick = () => {
