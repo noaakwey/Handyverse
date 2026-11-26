@@ -430,11 +430,23 @@ let currentBody = null;
 let currentTarget = null;
 let stars = Number(localStorage.getItem('erik-space-stars') || 0);
 let activeMission = null;
+function loadSolvedQuizzes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('erik-space-solved') || '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    localStorage.removeItem('erik-space-solved');
+    return [];
+  }
+}
+const solvedQuizzes = new Set(loadSolvedQuizzes());
 const solvedQuizzes = new Set(JSON.parse(localStorage.getItem('erik-space-solved') || '[]'));
 const missionPanel = document.getElementById('mission-panel');
 const missionText = document.getElementById('mission-text');
 const starScore = document.getElementById('star-score');
 const toast = document.getElementById('toast');
+const missionEmoji = document.getElementById('mission-emoji');
+const missionName = document.getElementById('mission-name');
 
 const QUIZ_OPTION_EMOJI = {
   'Солнце': '☀️', 'Комета': '☄️', 'Астероид': '🪨', 'Меркурий': '⚪', 'Земля': '🌍', 'Нептун': '🔵',
@@ -511,6 +523,10 @@ function renderQuiz(body) {
 function checkMission(body) {
   if (!activeMission || activeMission.bodyId !== body.id) return;
   activeMission = null;
+  missionEmoji.textContent = '🏆';
+  missionName.textContent = 'Победа!';
+  missionText.textContent = 'Ура! Получилось! Жми «Новая». ';
+  missionPanel.classList.remove('hidden');
   missionText.textContent = 'Ура! Получилось! Жми «Новая миссия». ';
   reward('Миссия выполнена! +2 ⭐', 2);
 }
@@ -591,7 +607,9 @@ canvas.addEventListener('pointerup', e => {
 // ============================================================
 const planetBar = document.getElementById('planet-bar');
 const chips = new Map();
+const bodyTargets = new Map();
 function addChip(body, target) {
+  bodyTargets.set(body.id, { body, target });
   const btn = document.createElement('button');
   btn.className = 'planet-chip';
   btn.dataset.id = body.id;
@@ -632,6 +650,42 @@ btnPlay.onclick = () => {
 };
 
 btnMission.onclick = () => {
+  const willOpen = missionPanel.classList.contains('hidden');
+  missionPanel.classList.toggle('hidden');
+  if (!willOpen) return;
+  if (!activeMission) newMission();
+  else renderMission();
+};
+document.getElementById('mission-next').onclick = () => newMission();
+document.getElementById('mission-repeat').onclick = () => speakMission();
+document.getElementById('mission-show').onclick = () => showMissionTarget();
+function speakMission() {
+  if (!activeMission) newMission();
+  else speech.say(`Миссия. ${activeMission.text}`);
+}
+function renderMission() {
+  const target = bodyTargets.get(activeMission.bodyId);
+  missionEmoji.textContent = target?.body.emoji || '🚀';
+  missionName.textContent = target?.body.name || 'Космос';
+  missionText.textContent = activeMission.text;
+  missionPanel.classList.remove('hidden');
+}
+function newMission() {
+  const next = MISSION_STEPS[(Math.random() * MISSION_STEPS.length) | 0];
+  activeMission = next === activeMission && MISSION_STEPS.length > 1
+    ? MISSION_STEPS[(MISSION_STEPS.indexOf(next) + 1) % MISSION_STEPS.length]
+    : next;
+  renderMission();
+  speech.say(`Новая миссия. ${activeMission.text}`);
+}
+function showMissionTarget() {
+  if (!activeMission) newMission();
+  const target = bodyTargets.get(activeMission.bodyId);
+  if (!target) return;
+  endTour();
+  selectBody(target.target, target.body);
+  missionPanel.classList.remove('hidden');
+}
   missionPanel.classList.toggle('hidden');
   if (!activeMission) newMission();
 };

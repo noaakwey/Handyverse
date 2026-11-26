@@ -551,6 +551,7 @@ body::before {
     linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box,
     linear-gradient(135deg, var(--card-color, var(--accent)), var(--accent-2), #ff7bd5) border-box;
   border: 4px solid transparent;
+  box-shadow: 0 22px 70px rgba(0,0,0,0.55), 0 0 42px rgba(255, 211, 77, 0.30);
   box-shadow: 0 22px 70px rgba(0,0,0,0.55), 0 0 42px color-mix(in srgb, var(--card-color, var(--accent)) 45%, transparent);
 }
 
@@ -571,6 +572,7 @@ body::before {
   margin: 0 auto 8px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.28), rgba(255,255,255,0.08));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 30px rgba(106, 209, 255, 0.30);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 30px color-mix(in srgb, var(--card-color, var(--accent)) 42%, transparent);
   animation: happy-float 2.6s ease-in-out infinite;
 }
@@ -583,6 +585,7 @@ body::before {
 }
 
 .say-btn {
+  box-shadow: 0 12px 28px rgba(255, 211, 77, 0.28), inset 0 1px 0 rgba(255,255,255,0.35);
   box-shadow: 0 12px 28px color-mix(in srgb, var(--card-color, var(--accent)) 35%, transparent), inset 0 1px 0 rgba(255,255,255,0.35);
 }
 
@@ -623,4 +626,61 @@ body::before {
 @keyframes star-bounce {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.08) rotate(-2deg); }
+}
+
+/* ---------- Миссии: заметная карточка цели ---------- */
+.mission-card {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 211, 77, 0.24), rgba(106, 209, 255, 0.18), rgba(255, 123, 213, 0.16));
+  border: 2px solid rgba(255,255,255,0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 16px 34px rgba(0,0,0,0.26);
+}
+#mission-emoji {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.16);
+  font-size: 42px;
+  filter: drop-shadow(0 5px 10px rgba(0,0,0,0.34));
+  animation: happy-float 2.4s ease-in-out infinite;
+}
+#mission-name {
+  color: #fff;
+  font-size: 24px;
+  line-height: 1.08;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+}
+.mission-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.mission-actions .say-btn.small {
+  padding: 10px 8px;
+  font-size: 15px;
+  border-radius: 16px;
+}
+#btn-mission {
+  background: linear-gradient(135deg, rgba(255, 211, 77, 0.34), rgba(255, 123, 213, 0.22));
+  box-shadow: 0 0 22px rgba(255, 211, 77, 0.22), inset 0 1px 0 rgba(255,255,255,0.16);
+}
+#mission-text {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.16);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+}
+@media (max-width: 560px) {
+  .mission-actions { grid-template-columns: 1fr; }
+  .mission-actions .say-btn.small { font-size: 17px; }
 }
